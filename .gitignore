@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+venv/
+
+# Secrets / auth
+client_secrets.json
+token.pickle
+
+# Local data, generated output, logs
+lebanese_rap_archive.db
+output/
+logs/*.log
+
+# Media (large binaries, not source)
+anime_clips/
+songs/
+*.png
+*.mp4
+
+# Editor/OS
+.DS_Store
