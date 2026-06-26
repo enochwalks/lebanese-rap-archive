@@ -74,17 +74,17 @@ rendered successfully, and it won't skip ahead to a different song.
 
 ```
 lebanese-rap-archive/
-├── main.py              <- daily entry point, run this on a schedule
-├── add_song.py          <- CLI to add new songs to the queue
-├── tracker.py            <- SQLite state tracker (also runnable standalone for status)
-├── video_builder.py      <- ffmpeg assembly logic
-├── youtube_uploader.py  <- separate OAuth + upload logic for this channel
-├── client_secrets.json  <- YOU provide this (OAuth creds, 2nd Google account)
-├── token.pickle          <- auto-created after first successful login
+├── main.py                 <- daily entry point, run this on a schedule
+├── add_song.py             <- CLI to add new songs to the queue
+├── tracker.py              <- SQLite state tracker (also runnable standalone for status)
+├── video_builder.py        <- ffmpeg assembly logic
+├── youtube_uploader.py     <- separate OAuth + upload logic for this channel
+├── client_secrets.json     <- YOU provide this (OAuth creds, 2nd Google account)
+├── token.pickle            <- auto-created after first successful login
 ├── lebanese_rap_archive.db <- auto-created SQLite tracker
-├── songs/                <- put song audio files here (or anywhere; path is stored per-song)
-├── anime_clips/          <- put your anime video files here
-├── output/                <- rendered final videos land here before upload
+├── songs/                  <- put song audio files here (or anywhere; path is stored per-song)
+├── anime_clips/            <- put your anime video files here
+├── output/                 <- rendered final videos land here before upload
 └── logs/
     └── run.log
 ```
