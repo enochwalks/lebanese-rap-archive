@@ -19,3 +19,27 @@ songs/
 
 # Editor/OS
 .DS_Store
+
+# Additional credentials
+*.pickle
+token_*.pickle
+
+# Old conversation dumps / saved web pages
+*.html
+*_files/
+Content pipeline*
+
+# Pre-rendered assets and one-off scripts
+*.zip
+lebanese_rap_intro_frames/
+.claude/
+channel_sync_report.txt
+
+# Local dev scripts (not for public repo)
+fix_paths.py
+fix_delete.py
+fix_rerender.py
+fix_uploader.py
+reset.py
+reset_song.py
+video_builder_BACKUP.py
