@@ -281,3 +281,70 @@ class TestMeasurementFallback:
         direction = HeuristicDirector().direct(calm, {"tempo_bpm": 70})
         assert direction.shot_length_bias > 1.0
         assert direction.prefer_windows == "calm"
+
+
+class TestCapabilityHonesty:
+    """Regression: the run announced 'asking Claude what they are' and then
+    silently fell back once per clip, because availability was discovered
+    inside the loop instead of checked up front."""
+
+    def test_missing_sdk_is_reported_not_announced(self, monkeypatch):
+        import builtins
+        from edit_engine.analysis import vision as vision_module
+
+        real_import = builtins.__import__
+
+        def no_anthropic(name, *args, **kwargs):
+            if name == "anthropic":
+                raise ImportError("no module named anthropic")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", no_anthropic)
+        available, reason = vision_module.vision_available()
+        assert not available and "anthropic" in reason
+
+        backend, director, note = vision_module.default_backends(True)
+        assert isinstance(backend, MeasurementVision)
+        assert isinstance(director, HeuristicDirector)
+        assert "unavailable" in note and "measurements" in note
+
+    def test_disabled_vision_says_so(self):
+        from edit_engine.analysis.vision import default_backends
+        backend, _, note = default_backends(False)
+        assert isinstance(backend, MeasurementVision)
+        assert "disabled" in note
+
+    def test_progress_is_reported_per_source(self, project, monkeypatch):
+        from edit_engine.analysis import media as media_module
+        from edit_engine.analysis import music as music_module
+        monkeypatch.setattr(media_module, "_measure", lambda path, ffmpeg: analysis(0.03))
+        monkeypatch.setattr(music_module, "energy_envelope",
+                            lambda path, hop=0.25, ffmpeg="ffmpeg": [0.5] * 80)
+        monkeypatch.setattr(music_module, "detect_beats", lambda path: ([], None, False))
+
+        sequence = project.add_sequence(Sequence.create(rate=RATE))
+        song = fake_audio_media(project, "song.wav", seconds=20)
+        visuals = [fake_video_media(project, f"c{i}.mp4", seconds=20) for i in range(3)]
+        messages = []
+        build_directed_video(project, song.path, [v.path for v in visuals],
+                             sequence=sequence, seed=1, use_vision=False,
+                             on_progress=messages.append)
+        assert sum("analysing" in m for m in messages) == 3
+        assert any("deciding" in m for m in messages)
+
+    def test_backend_note_is_recorded_in_the_project(self, project, monkeypatch):
+        from edit_engine.analysis import media as media_module
+        from edit_engine.analysis import music as music_module
+        monkeypatch.setattr(media_module, "_measure", lambda path, ffmpeg: analysis(0.03))
+        monkeypatch.setattr(music_module, "energy_envelope",
+                            lambda path, hop=0.25, ffmpeg="ffmpeg": [0.5] * 80)
+        monkeypatch.setattr(music_module, "detect_beats", lambda path: ([], None, False))
+
+        sequence = project.add_sequence(Sequence.create(rate=RATE))
+        song = fake_audio_media(project, "song.wav", seconds=20)
+        visual = fake_video_media(project, "c.mp4", seconds=20)
+        build_directed_video(project, song.path, [visual.path], sequence=sequence,
+                             seed=1, use_vision=False)
+        recorded = sequence.metadata["analysis"]
+        assert "disabled" in recorded["backend_note"]
+        assert recorded["beats_available"] is False

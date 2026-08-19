@@ -129,11 +129,19 @@ def build_video(song_path, anime_clip_path, output_path, artist, title, release_
                   seed=seed, name=f"{artist} - {title}")
 
     if directed:
-        print(f"[engine] analysing {len(sources)} source(s)"
-              + (" and asking Claude what they are" if use_vision else ""))
+        # Say what will actually happen before spending minutes on it, rather
+        # than announcing a capability and silently falling back once per clip.
+        try:
+            import librosa                                    # noqa: F401
+        except ImportError:
+            print("[engine] WARNING: librosa is not installed, so cuts will fall on a "
+                  "fixed interval instead of the beat. Fix: py -m pip install librosa")
+
+        print(f"[engine] {len(sources)} source(s) to analyse")
         sequence, stack = build_directed_video(
             project, song_path, sources, use_vision=use_vision,
-            cache_path=BASE_DIR / ".analysis_cache.json", **common)
+            cache_path=BASE_DIR / ".analysis_cache.json",
+            on_progress=lambda message: print(f"[engine] {message}"), **common)
         direction = sequence.metadata["analysis"]["direction"]
         print(f"[engine] direction: {direction['style_name']} "
               f"({direction['backend']}) -- {direction['rationale']}")

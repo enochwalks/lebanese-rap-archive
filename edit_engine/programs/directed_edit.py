@@ -180,7 +180,7 @@ def build_directed_video(project: Project, song_path: str | Path,
                          seed: Optional[int] = None,
                          use_vision: bool = True,
                          cache_path: Optional[str | Path] = None,
-                         vision=None, director=None,
+                         vision=None, director=None, on_progress=None,
                          name: str = "Music video") -> Tuple[Sequence, CommandStack]:
     """Build a timeline directed by what the footage and the song actually are."""
     style = style or BeatEditStyle()
@@ -191,10 +191,17 @@ def build_directed_video(project: Project, song_path: str | Path,
     rate = sequence.rate
 
     cache = AnalysisCache(cache_path)
+    backend_note = "custom backends"
     if vision is None or director is None:
-        default_vision, default_director = default_backends(use_vision, cache)
+        default_vision, default_director, backend_note = default_backends(use_vision, cache)
         vision = vision or default_vision
         director = director or default_director
+
+    def report(message: str) -> None:
+        if on_progress is not None:
+            on_progress(message)
+
+    report(backend_note)
 
     # -- look and listen --------------------------------------------------
     song = project.import_media(song_path)
@@ -203,10 +210,14 @@ def build_directed_video(project: Project, song_path: str | Path,
         raise ValueError(f"{song_path} has no duration; is it really an audio file?")
     music = analyse_music(song_path, cache)
 
+    visual_paths = list(visual_paths)
     plans: List[SourcePlan] = []
-    for path in visual_paths:
+    for index, path in enumerate(visual_paths, start=1):
         ref = project.import_media(path)
         info = ref.require_info()
+        # Scanning a 4K clip takes real seconds; without this the terminal
+        # looks hung for minutes on a folder of large sources.
+        report(f"analysing {index}/{len(visual_paths)}: {ref.name}")
         analysis = None if info.is_still else analyse_clip(ref.path, cache)
         plans.append(SourcePlan(ref=ref, analysis=analysis,
                                 description=vision.describe(ref.path, analysis)))
@@ -221,6 +232,7 @@ def build_directed_video(project: Project, song_path: str | Path,
         "beat_count": len(music.beats),
         "song_seconds": float(song_length.to_seconds()),
     }
+    report("deciding the editorial approach")
     direction = director.direct([p.description for p in plans], music_summary)
     cut_style = _biased_style(style, direction)
 
@@ -238,6 +250,8 @@ def build_directed_video(project: Project, song_path: str | Path,
         "song": song.name,
         "song_seconds": round(float(song_length.to_seconds()), 3),
         "visual_sources": [p.ref.name for p in plans],
+        "backend_note": backend_note,
+        "beats_available": music.beats_available,
         "direction": direction.to_dict(),
         "sources": [dict(p.description.to_dict(),
                          motion_rank=round(p.motion_rank, 3),

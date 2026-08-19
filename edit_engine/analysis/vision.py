@@ -358,8 +358,34 @@ class ClaudeDirector:
         return direction
 
 
+def vision_available() -> tuple[bool, str]:
+    """Can we actually call the API? Returns (available, reason).
+
+    Checked up front rather than discovered per clip, so the run can say what
+    it is really going to do instead of announcing Claude and then silently
+    falling back eleven times.
+    """
+    try:
+        import anthropic
+    except ImportError:
+        return False, "the anthropic SDK is not installed (py -m pip install anthropic)"
+    try:
+        anthropic.Anthropic()
+    except Exception as error:                           # noqa: BLE001
+        return False, f"no API credentials ({error})"
+    return True, "ready"
+
+
 def default_backends(use_vision: bool, cache: Optional[AnalysisCache] = None):
-    """(vision, director) pair for a run. Falls back cleanly when unavailable."""
+    """(vision, director, note) for a run. Falls back cleanly when unavailable.
+
+    `note` states what will actually happen, so callers can print the truth.
+    """
     if not use_vision:
-        return MeasurementVision(), HeuristicDirector()
-    return ClaudeVision(cache=cache), ClaudeDirector()
+        return (MeasurementVision(), HeuristicDirector(),
+                "vision disabled; directing from measurements")
+    available, reason = vision_available()
+    if not available:
+        return (MeasurementVision(), HeuristicDirector(),
+                f"vision unavailable -- {reason}; directing from measurements instead")
+    return ClaudeVision(cache=cache), ClaudeDirector(), "vision enabled (Claude)"
