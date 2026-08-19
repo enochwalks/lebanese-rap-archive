@@ -115,7 +115,7 @@ def _video_segment_chain(plan: RenderPlan, segment: VideoSegment, label: str,
     # compose the same way regardless of what raster the source was shot at.
     if segment.effects:
         context = EffectContext(plan.width, plan.height, plan.frame_rate,
-                                segment.timeline_duration)
+                                segment.timeline_duration, is_still=segment.is_still)
         effect_filters, warnings = compile_effects(segment.effects, context)
         filters.extend(effect_filters)
         for warning in warnings:

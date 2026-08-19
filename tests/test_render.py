@@ -18,6 +18,7 @@ import pytest
 from conftest import requires_ffmpeg
 from edit_engine.model import Project, Sequence, make_clip
 from edit_engine.render import FFmpegRenderer, RenderSettings, compile_plan
+from edit_engine.render.ffmpeg import build_command
 from edit_engine.render.ffmpeg import RenderError
 
 WIDTH, HEIGHT, FPS = 320, 180, Fraction(30)
@@ -268,3 +269,85 @@ class TestRetimeRendering:
         output = tmp_path / "fast.mp4"
         FFmpegRenderer().render(compile_plan(sequence, project.registry, settings=fast()), output)
         assert probe(output, "stream=nb_frames")[0] == "30"
+
+
+class TestEffectsDoNotFreezeFootage:
+    """Regression: `ken_burns` on video froze the shot on its first frame.
+
+    zoompan's `d` is output frames PER INPUT FRAME. d=N on a still is a
+    correct N-frame move; d=N on video generates N frames from input frame 0,
+    so the picture stops while the camera drifts. The shot picker was choosing
+    that treatment for most long video shots, which read as the editor
+    randomly pausing the video.
+    """
+
+    @pytest.fixture
+    def colour_phases(self, tmp_path):
+        """One second each of red, green, blue -- so 'did the content advance?'
+        is a question about hue, which a zoom cannot fake."""
+        path = tmp_path / "phases.mp4"
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error",
+             "-f", "lavfi", "-i", f"color=c=red:s={WIDTH}x{HEIGHT}:r={FPS}:d=1",
+             "-f", "lavfi", "-i", f"color=c=green:s={WIDTH}x{HEIGHT}:r={FPS}:d=1",
+             "-f", "lavfi", "-i", f"color=c=blue:s={WIDTH}x{HEIGHT}:r={FPS}:d=1",
+             "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]", "-map", "[v]",
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", str(path)], check=True)
+        return path
+
+    def render_with(self, project, sequence, media, kind, output):
+        from edit_engine.model import Effect, new_id
+        clip = make_clip(media, sequence, sequence.zero(),
+                         duration=sequence.frames(90), name="shot")
+        if kind:
+            clip.effects = [Effect(new_id("fx"), kind, {})]
+        sequence.video_tracks[0].place(clip)
+        FFmpegRenderer().render(
+            compile_plan(sequence, project.registry, settings=fast()), output)
+
+    @pytest.mark.parametrize("kind", [None, "punch", "push", "ken_burns", "zoom", "flash"])
+    def test_video_keeps_playing_under_every_effect(self, project_with_sources,
+                                                    colour_phases, tmp_path, kind):
+        project, sequence, _ = project_with_sources
+        media = project.import_media(colour_phases)
+        output = tmp_path / f"eff-{kind}.mp4"
+        self.render_with(project, sequence, media, kind, output)
+        seen = [dominant(frame_color(output, n)) for n in (5, 45, 85)]
+        assert seen == ["red", "green", "blue"], (
+            f"{kind} froze the footage: sampled {seen}")
+
+    def test_ken_burns_still_gets_the_real_move_on_a_photo(self, project_with_sources,
+                                                          tmp_path):
+        """The photo path must keep using d=frames, or stills stop moving."""
+        from edit_engine.model import Effect, new_id
+        project, sequence, _ = project_with_sources
+        photo = tmp_path / "photo.png"
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                        "-i", f"testsrc2=size={WIDTH * 2}x{HEIGHT * 2}:d=1",
+                        "-frames:v", "1", str(photo)], check=True)
+        media = project.import_media(photo)
+        clip = make_clip(media, sequence, sequence.zero(),
+                         duration=sequence.frames(60), name="still")
+        clip.effects = [Effect(new_id("fx"), "ken_burns", {"motion": "pan_lr"})]
+        sequence.video_tracks[0].place(clip)
+        plan = compile_plan(sequence, project.registry, settings=fast())
+        command = build_command(plan, tmp_path / "kb.mp4")
+        graph = command[command.index("-filter_complex") + 1]
+        assert "zoompan" in graph and ":d=60:" in graph, "stills lost their Ken Burns move"
+
+    def test_a_still_actually_moves_when_rendered(self, project_with_sources, tmp_path):
+        from edit_engine.model import Effect, new_id
+        project, sequence, _ = project_with_sources
+        photo = tmp_path / "photo2.png"
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi",
+                        "-i", f"testsrc2=size={WIDTH * 2}x{HEIGHT * 2}:d=1",
+                        "-frames:v", "1", str(photo)], check=True)
+        media = project.import_media(photo)
+        clip = make_clip(media, sequence, sequence.zero(),
+                         duration=sequence.frames(45), name="still")
+        clip.effects = [Effect(new_id("fx"), "ken_burns", {"motion": "pan_lr"})]
+        sequence.video_tracks[0].place(clip)
+        output = tmp_path / "kb-render.mp4"
+        FFmpegRenderer().render(compile_plan(sequence, project.registry, settings=fast()), output)
+        first, last = frame_color(output, 2), frame_color(output, 42)
+        assert first != last, "Ken Burns produced a static picture"

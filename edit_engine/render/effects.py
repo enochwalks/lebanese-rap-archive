@@ -33,6 +33,7 @@ class EffectContext:
     height: int
     frame_rate: Fraction
     duration: Fraction          # seconds on the timeline
+    is_still: bool = False      # a photo, not a moving shot
 
     @property
     def frames(self) -> int:
@@ -78,9 +79,39 @@ def _punch(params: Dict, ctx: EffectContext) -> List[str]:
             f"d=1:s={ctx.width}x{ctx.height}:fps={ctx.frame_rate}"]
 
 
+@register("push")
+def _push(params: Dict, ctx: EffectContext) -> List[str]:
+    """Gradual push-in that keeps the footage playing.
+
+    d=1 means one output frame per input frame, so the shot advances normally
+    while the zoom ramps across it. This is the video equivalent of ken_burns.
+    """
+    amount = _number(params, "amount", 0.10)
+    frames = ctx.frames
+    direction = str(params.get("direction", "in"))
+    if direction == "out":
+        zoom = f"{1 + amount:.4f}-{amount:.4f}*on/{frames}"
+    else:
+        zoom = f"1.0+{amount:.4f}*on/{frames}"
+    return [f"zoompan=z='{zoom}':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"d=1:s={ctx.width}x{ctx.height}:fps={ctx.frame_rate}"]
+
+
 @register("ken_burns")
 def _ken_burns(params: Dict, ctx: EffectContext) -> List[str]:
-    """Slow push or drift across a still. `motion`: zoom_in|zoom_out|pan_lr|pan_rl|diag."""
+    """Slow push or drift across a still. `motion`: zoom_in|zoom_out|pan_lr|pan_rl|diag.
+
+    CAREFUL: zoompan's `d` is output frames *per input frame*. With d=N on a
+    photo (one input frame) you get an N-frame move -- correct. With d=N on a
+    video you get N frames generated from input frame 0, i.e. the picture
+    freezes while the camera drifts over it. That is a still, not a shot.
+
+    So on video this falls through to `push`, which does the same visual move
+    with d=1 and lets the footage keep playing.
+    """
+    if not ctx.is_still:
+        return _push(params, ctx)
+
     motion = str(params.get("motion", "zoom_in"))
     amount = _number(params, "amount", 0.15)
     frames = ctx.frames

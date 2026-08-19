@@ -74,6 +74,7 @@ class VideoSegment:
     speed: Fraction = Fraction(1)
     source_width: int = 0
     source_height: int = 0
+    is_still: bool = False
     clip_id: str = ""
     clip_name: str = ""
     effects: List[Dict[str, Any]] = field(default_factory=list)
@@ -238,6 +239,7 @@ def compile_plan(sequence: Sequence, registry: MediaRegistry,
                 layer=layer, speed=clip.speed,
                 source_width=video_stream.width if video_stream else 0,
                 source_height=video_stream.height if video_stream else 0,
+                is_still=info.is_still,
                 clip_id=clip.clip_id, clip_name=clip.name or clip.clip_id,
                 effects=[e.to_dict() for e in clip.effects if e.enabled],
             ))

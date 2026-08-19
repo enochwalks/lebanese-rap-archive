@@ -58,7 +58,8 @@ class BeatEditStyle:
     #: shots longer than this lean towards a slow push instead of a punch
     long_shot_seconds: float = 3.5
     punch_amount: float = 0.12
-    ken_burns_amount: float = 0.15
+    ken_burns_amount: float = 0.15      # stills only
+    push_amount: float = 0.10           # video slow push
     #: never show the same source twice in a row when there is a choice
     avoid_repeats: bool = True
 
@@ -132,21 +133,24 @@ def _pick_effect(index: int, duration: RationalTime, style: BeatEditStyle,
         motion = rng.choice(["zoom_in", "zoom_out", "pan_lr", "pan_rl", "diag"])
         return Effect(new_id("fx"), "ken_burns",
                       {"motion": motion, "amount": style.ken_burns_amount})
+    # Moving footage gets `push`, never `ken_burns`: the latter is a photo
+    # treatment and would freeze the shot (see effects.py).
     if duration.to_float_seconds() > style.long_shot_seconds:
-        kind = rng.choices(["ken_burns", "punch", "plain"], weights=[6, 2, 2])[0]
+        kind = rng.choices(["push", "punch", "plain"], weights=[6, 2, 2])[0]
     elif index > 0 and rng.random() < style.flash_probability:
         kind = "flash"
     else:
-        kind = rng.choices(["punch", "plain", "ken_burns"], weights=[5, 3, 2])[0]
+        kind = rng.choices(["punch", "plain", "push"], weights=[5, 3, 2])[0]
 
     if kind == "punch":
         return Effect(new_id("fx"), "punch", {"amount": style.punch_amount})
     if kind == "flash":
         return Effect(new_id("fx"), "flash", {"duration": 0.1})
-    if kind == "ken_burns":
-        return Effect(new_id("fx"), "ken_burns",
-                      {"motion": "zoom_in", "amount": style.ken_burns_amount * 0.7})
-    return Effect(new_id("fx"), "zoom", {"factor": 1.0})    # a clean, still cut
+    if kind == "push":
+        return Effect(new_id("fx"), "push",
+                      {"amount": style.push_amount,
+                       "direction": rng.choice(["in", "in", "out"])})
+    return Effect(new_id("fx"), "zoom", {"factor": 1.0})    # a clean, static cut
 
 
 def _source_window(ref: MediaRef, duration: RationalTime, rate: Fraction,
