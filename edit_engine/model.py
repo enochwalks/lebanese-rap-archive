@@ -365,6 +365,10 @@ class Sequence:
     in_point: Optional[RationalTime] = None
     out_point: Optional[RationalTime] = None
     background_color: str = "black"
+    #: free-form analysis/provenance (detected beats, tempo, which program
+    #: built this and with what settings). Serialized, so a saved project
+    #: still explains itself months later.
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.rate = normalize_rate(self.rate)
@@ -522,6 +526,7 @@ class Sequence:
             "rate": str(self.rate), "width": self.width, "height": self.height,
             "sample_rate": self.sample_rate, "channels": self.channels,
             "background_color": self.background_color,
+            "metadata": dict(self.metadata),
             "in_point": _time_to_dict(self.in_point) if self.in_point else None,
             "out_point": _time_to_dict(self.out_point) if self.out_point else None,
             "video_tracks": [t.to_dict() for t in self.video_tracks],
@@ -537,6 +542,7 @@ class Sequence:
             width=data.get("width", 1920), height=data.get("height", 1080),
             sample_rate=data.get("sample_rate", 48000), channels=data.get("channels", 2),
             background_color=data.get("background_color", "black"),
+            metadata=dict(data.get("metadata", {})),
             video_tracks=[Track.from_dict(t) for t in data.get("video_tracks", [])],
             audio_tracks=[Track.from_dict(t) for t in data.get("audio_tracks", [])],
             markers=[Marker.from_dict(m) for m in data.get("markers", [])],

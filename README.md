@@ -105,6 +105,7 @@ edit_engine/
 ├── ops.py            blade, insert, overwrite, lift, extract, ripple,
 │                     roll, slip, slide, retime, link, markers
 ├── edl.py            CMX3600 export, so an auto-cut can be finished by a human
+├── inspect.py        standalone HTML report: the timeline and every decision
 ├── render/
 │   ├── plan.py       timeline -> RenderPlan (pure, testable, backend-agnostic)
 │   ├── ffmpeg.py     RenderPlan -> one ffmpeg pass
@@ -140,8 +141,24 @@ Build a whole beat-synced video in one call:
 python engine_video_builder.py songs/track.wav output/track.mp4 "Artist" "Title" clips
 ```
 
-That writes three files: the `.mp4`, a `.json` project you can reopen and keep
-editing, and an `.edl` you can import into Resolve or Premiere to finish by hand.
+That writes four files: the `.mp4`, a `.json` project you can reopen and keep
+editing, an `.edl` you can import into Resolve or Premiere to finish by hand,
+and an `.html` report.
+
+### The report
+
+Open `output/track.html` in any browser. It shows the edit from above: the
+timeline with every shot coloured by source, the detected beat grid with the
+beats actually cut on highlighted, and a shot list where each row says *why*
+the program made that choice — why that source, why that in-point, why that
+move. Hovering a row highlights the shot on the timeline.
+
+It reads raw project JSON, so you can drop any other `project.json` onto the
+page to inspect it — useful for comparing two seeds side by side.
+
+It also tells you when it is flying blind: no beat data means the cut fell
+back to a fixed interval, and the page says so in as many words rather than
+reporting a meaningless "cuts on beat" percentage.
 
 ### What it guarantees
 

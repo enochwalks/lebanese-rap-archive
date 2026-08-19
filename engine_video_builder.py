@@ -48,6 +48,7 @@ from typing import List, Optional
 
 from edit_engine import Project, Sequence
 from edit_engine.edl import to_edl
+from edit_engine.inspect import write_report
 from edit_engine.programs.beat_edit import BeatEditStyle, build_music_video, collect_visuals
 from edit_engine.render import FFmpegRenderer, RenderSettings, compile_plan
 
@@ -92,11 +93,13 @@ def _visual_sources(style: str, anime_clip_path: str = "") -> List[Path]:
 def build_video(song_path, anime_clip_path, output_path, artist, title, release_date,
                 logo_path=None, style: str = "clips", seed: Optional[int] = None,
                 save_project: bool = True, export_edl: bool = True,
-                progress: bool = True):
+                write_html_report: bool = True, progress: bool = True):
     """Build and render one video. Signature matches video_builder.build_video.
 
-    Also writes `<output>.json` (the editable project) and `<output>.edl`
-    (hand-off to a real NLE) next to the video unless asked not to.
+    Alongside the video it writes, unless asked not to:
+      <output>.json   the editable project
+      <output>.edl    hand-off to a real NLE
+      <output>.html   a report showing every cut and why it was made
     """
     if style in UNSUPPORTED_STYLES:
         raise NotImplementedError(
@@ -152,6 +155,10 @@ def build_video(song_path, anime_clip_path, output_path, artist, title, release_
         export.write(output_path.with_suffix(".edl"))
         for warning in export.warnings:
             print(f"[engine] EDL: {warning}")
+    if write_html_report:
+        report = write_report(project, sequence, output_path.with_suffix(".html"),
+                              title=f"{artist} - {title}")
+        print(f"[engine] report -> {report}  (open it in a browser)")
 
     print(f"[engine] Done -> {output_path} (style={style})")
     return str(output_path)

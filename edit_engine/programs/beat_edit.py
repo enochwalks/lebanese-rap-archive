@@ -127,30 +127,38 @@ def plan_cuts(beats: Seq[RationalTime], total: RationalTime, rate: Fraction,
 
 
 def _pick_effect(index: int, duration: RationalTime, style: BeatEditStyle,
-                 is_still: bool, rng: random.Random) -> Effect:
-    """Choose a per-shot move, so the edit is not the same punch every time."""
+                 is_still: bool, rng: random.Random) -> Tuple[Effect, str]:
+    """Choose a per-shot move, and say why. Returns (effect, reason)."""
     if is_still:
         motion = rng.choice(["zoom_in", "zoom_out", "pan_lr", "pan_rl", "diag"])
-        return Effect(new_id("fx"), "ken_burns",
-                      {"motion": motion, "amount": style.ken_burns_amount})
+        return (Effect(new_id("fx"), "ken_burns",
+                       {"motion": motion, "amount": style.ken_burns_amount}),
+                f"still photo -> Ken Burns ({motion})")
     # Moving footage gets `push`, never `ken_burns`: the latter is a photo
     # treatment and would freeze the shot (see effects.py).
-    if duration.to_float_seconds() > style.long_shot_seconds:
+    seconds = duration.to_float_seconds()
+    if seconds > style.long_shot_seconds:
         kind = rng.choices(["push", "punch", "plain"], weights=[6, 2, 2])[0]
+        why = f"long shot ({seconds:.2f}s > {style.long_shot_seconds}s)"
     elif index > 0 and rng.random() < style.flash_probability:
         kind = "flash"
+        why = f"flash accent (rolled under p={style.flash_probability})"
     else:
         kind = rng.choices(["punch", "plain", "push"], weights=[5, 3, 2])[0]
+        why = f"short shot ({seconds:.2f}s)"
 
     if kind == "punch":
-        return Effect(new_id("fx"), "punch", {"amount": style.punch_amount})
+        return (Effect(new_id("fx"), "punch", {"amount": style.punch_amount}),
+                f"{why} -> punch")
     if kind == "flash":
-        return Effect(new_id("fx"), "flash", {"duration": 0.1})
+        return (Effect(new_id("fx"), "flash", {"duration": 0.1}), f"{why} -> flash")
     if kind == "push":
-        return Effect(new_id("fx"), "push",
-                      {"amount": style.push_amount,
-                       "direction": rng.choice(["in", "in", "out"])})
-    return Effect(new_id("fx"), "zoom", {"factor": 1.0})    # a clean, static cut
+        direction = rng.choice(["in", "in", "out"])
+        return (Effect(new_id("fx"), "push",
+                       {"amount": style.push_amount, "direction": direction}),
+                f"{why} -> slow push {direction}")
+    return (Effect(new_id("fx"), "zoom", {"factor": 1.0}),
+            f"{why} -> clean cut, no move")
 
 
 def _source_window(ref: MediaRef, duration: RationalTime, rate: Fraction,
@@ -205,7 +213,32 @@ def build_music_video(project: Project, song_path: str | Path,
         intro_length = intro_ref.require_info().duration(rate).aligned(rate, "floor")
 
     song_length = song_info.duration(rate).aligned(rate, "floor")
-    cuts = plan_cuts(detect_beats(song_path, rate, song_length), song_length, rate, style, rng)
+    beats = detect_beats(song_path, rate, song_length)
+    cuts = plan_cuts(beats, song_length, rate, style, rng)
+
+    # Record what the analysis saw and what the program was told to do. A
+    # timeline that cannot explain itself is not reviewable, and reviewing the
+    # decisions is the whole point of generating them.
+    beat_seconds = [round(b.to_float_seconds(), 4) for b in beats]
+    sequence.metadata["analysis"] = {
+        "program": "beat_edit",
+        "seed": seed,
+        "cut_mode": "beats" if beats else "fixed interval (no beat data)",
+        "beat_count": len(beats),
+        "beats": beat_seconds,
+        "tempo_bpm": (round(60 * (len(beats) - 1) / (beat_seconds[-1] - beat_seconds[0]), 1)
+                      if len(beats) > 1 and beat_seconds[-1] > beat_seconds[0] else None),
+        "song": song.name,
+        "song_seconds": round(float(song_length.to_seconds()), 3),
+        "visual_sources": [v.name for v in visuals],
+        "style": {
+            "min_beats_per_cut": style.min_beats_per_cut,
+            "max_beats_per_cut": style.max_beats_per_cut,
+            "min_shot_seconds": style.min_shot_seconds,
+            "long_shot_seconds": style.long_shot_seconds,
+            "flash_probability": style.flash_probability,
+        },
+    }
 
     with stack.transaction(f"Build {name}"):
         if intro_ref is not None:
@@ -217,6 +250,7 @@ def build_music_video(project: Project, song_path: str | Path,
                               make_clip(song, sequence, intro_length,
                                         duration=song_length, name=song.name)), sequence)
 
+        beat_set = {round(b.to_float_seconds(), 3) for b in beats}
         previous = -1
         for index in range(len(cuts) - 1):
             start = cuts[index] + intro_length
@@ -226,8 +260,12 @@ def build_music_video(project: Project, song_path: str | Path,
 
             if len(visuals) == 1 or not style.avoid_repeats:
                 choice = rng.randrange(len(visuals))
+                source_reason = ("only one source available" if len(visuals) == 1
+                                 else "picked at random (repeat avoidance off)")
             else:
                 choice = rng.choice([i for i in range(len(visuals)) if i != previous])
+                source_reason = (f"picked at random, excluding {visuals[previous].name}"
+                                 if previous >= 0 else "picked at random (first shot)")
             previous = choice
             ref = visuals[choice]
             info = ref.require_info()
@@ -235,7 +273,22 @@ def build_music_video(project: Project, song_path: str | Path,
             source_in = _source_window(ref, duration, rate, rng)
             clip = make_clip(ref, sequence, start, source_in=source_in,
                              duration=duration, name=f"{ref.name} #{index + 1}")
-            clip.effects = [_pick_effect(index, duration, style, info.is_still, rng)]
+            effect, effect_reason = _pick_effect(index, duration, style, info.is_still, rng)
+            clip.effects = [effect]
+
+            cut_at = round(cuts[index].to_float_seconds(), 3)
+            clip.metadata["decision"] = {
+                "shot": index + 1,
+                "cut_on_beat": index == 0 or cut_at in beat_set,
+                "cut_at_seconds": cut_at,
+                "duration_seconds": round(duration.to_float_seconds(), 3),
+                "source_reason": source_reason,
+                "source_in_reason": (
+                    f"random in-point at {source_in.to_float_seconds():.2f}s of "
+                    f"{float(info.duration_seconds):.1f}s"
+                    if info.duration_seconds else "still image, no in-point"),
+                "effect_reason": effect_reason,
+            }
             stack.run(ops.AddClip(video_track.track_id, clip), sequence)
 
     return sequence, stack
