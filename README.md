@@ -89,6 +89,109 @@ lebanese-rap-archive/
     └── run.log
 ```
 
+## Editing engine (`edit_engine/`)
+
+`video_builder.py` renders one fixed look by driving ffmpeg directly. The
+engine is the general version of that: a frame-accurate, non-destructive
+editing engine that represents a cut as *data* — a timeline you can inspect,
+undo, save, export to a real NLE, and render.
+
+```
+edit_engine/
+├── timebase.py       exact rational time; no float seconds anywhere above it
+├── media.py          ffprobe + cache, offline media, relinking (never writes to sources)
+├── model.py          Project / Sequence / Track / Clip, invariants enforced
+├── commands.py       transactional command stack: undo, redo, atomic failure
+├── ops.py            blade, insert, overwrite, lift, extract, ripple,
+│                     roll, slip, slide, retime, link, markers
+├── edl.py            CMX3600 export, so an auto-cut can be finished by a human
+├── render/
+│   ├── plan.py       timeline -> RenderPlan (pure, testable, backend-agnostic)
+│   ├── ffmpeg.py     RenderPlan -> one ffmpeg pass
+│   └── effects.py    per-clip effect registry (punch, ken burns, fade, colour…)
+└── programs/
+    └── beat_edit.py  builds a beat-synced music-video timeline
+```
+
+### Using it
+
+```python
+from fractions import Fraction
+from edit_engine import Project, Sequence, CommandStack, ops, make_clip
+from edit_engine.render import compile_plan, FFmpegRenderer
+
+project = Project(name="Track 12")
+song    = project.import_media("songs/track.wav")
+seq     = project.add_sequence(Sequence.create(rate=Fraction(30000, 1001)))
+stack   = CommandStack(project)
+
+stack.run(ops.AddClip(seq.audio_tracks[0].track_id, make_clip(song, seq, seq.zero())))
+stack.run(ops.Blade(seq.seconds(12.5)))
+stack.run(ops.Trim(clip_id, ops.HEAD, seq.frames(6), ripple=True))
+stack.undo()                       # exactly back to where you were
+
+FFmpegRenderer().render(compile_plan(seq, project.registry), "output/track-12.mp4")
+project.save("output/track-12.json")
+```
+
+Build a whole beat-synced video in one call:
+
+```
+python engine_video_builder.py songs/track.wav output/track.mp4 "Artist" "Title" clips
+```
+
+That writes three files: the `.mp4`, a `.json` project you can reopen and keep
+editing, and an `.edl` you can import into Resolve or Premiere to finish by hand.
+
+### What it guarantees
+
+* **Frame accuracy.** All time is exact rationals (`30000/1001`, not `29.97`),
+  so a cut placed on frame 5400 renders on frame 5400. The render tests prove
+  it by reading pixels back out of the encoded file.
+* **Non-destructive.** Source media is opened read-only. An edit changes only
+  numbers describing which part of a file plays when.
+* **Real undo.** Every edit is a command with before/after snapshots of just
+  the tracks it declares it touches. A 600-edit randomised storm undoes back
+  to a byte-identical timeline (`tests/test_commands.py`).
+* **Fails before it wastes your time.** Offline media, invalid ranges and
+  locked tracks are refused at plan time, not three hours into a batch. A
+  killed render leaves no half-finished file that a resume would trust.
+* **Sample-accurate audio.** Audio is delayed in samples, not milliseconds, so
+  J- and L-cuts land where the model says they do.
+
+### Performance shape
+
+Each track is flattened with `concat` and tracks are composited with one
+`overlay` each, instead of one overlay per clip. A 200-cut single-track edit
+compiles to one concat and zero overlays; the naive shape would push a million
+mostly-empty frame pairs through 200 chained filters.
+
+### Switching the daily run over (opt-in)
+
+`main.py` still uses `video_builder.py` and nothing changes on its own. To use
+the engine instead, import the shim and pick a supported style:
+
+```python
+import engine_video_builder as video_builder   # in main.py
+VIDEO_STYLE = "clips"     # or "kenburns"
+```
+
+**Not yet supported:** the `visualizer` and `combo` styles. Those draw an
+audio-reactive waveform, EQ bars and title text across the whole programme —
+sequence-level generated layers, which arrive with generator-track support in
+a later phase. `video_builder.py` still owns that look and is unchanged.
+
+### Tests
+
+```
+pip install -r requirements-dev.txt
+python -m pytest tests/ -q
+```
+
+124 tests. The render tests need `ffmpeg`/`ffprobe` on PATH and skip
+themselves if it is missing; everything else runs on the standard library
+alone.
+
 ## Important reminder — permission gating
 
 Every song needs **logged, verifiable** permission before it can be uploaded —
