@@ -63,19 +63,29 @@ UNSUPPORTED_STYLES = {
 
 
 def _visual_sources(style: str, anime_clip_path: str = "") -> List[Path]:
+    """Pick the visual pool for a style, filtered to the kind that style wants."""
+    skipped: List[str] = []
     if style == "kenburns":
-        sources = collect_visuals(BASE_DIR / "artwork")
-        if not sources:
-            raise FileNotFoundError(
-                f"No images in {BASE_DIR / 'artwork'} for the kenburns style.")
-        return sources
+        folder = BASE_DIR / "artwork"
+        sources = collect_visuals(folder, kinds="image", report=skipped)
+        what = "images"
+    else:
+        folder = BASE_DIR / "anime_clips"
+        # video only: thumbnail sidecars living next to downloaded clips are
+        # not shots, and cutting them in looks like a bug in the edit
+        sources = collect_visuals(folder, kinds="video", report=skipped)
+        if not sources and anime_clip_path:
+            sources = [Path(anime_clip_path)]
+        what = "video clips"
 
-    sources = collect_visuals(BASE_DIR / "anime_clips")
-    if not sources and anime_clip_path:
-        sources = [Path(anime_clip_path)]
+    if skipped:
+        print(f"[engine] skipped {len(skipped)} file(s) ffmpeg cannot open "
+              f"(e.g. {skipped[0]}) -- convert them to JPEG to use them")
     if not sources:
         raise FileNotFoundError(
-            f"No clips in {BASE_DIR / 'anime_clips'} for the clips style.")
+            f"No {what} found in {folder} for style={style!r}. "
+            f"Put your {what} there and run again.")
+    print(f"[engine] {len(sources)} visual source(s) from {folder.name}/")
     return sources
 
 
@@ -93,6 +103,14 @@ def build_video(song_path, anime_clip_path, output_path, artist, title, release_
             f"engine_video_builder does not render {UNSUPPORTED_STYLES[style]} yet "
             f"(generated overlay layers are a later phase). Use video_builder.py "
             f"for style={style!r}, or pick 'clips' / 'kenburns' here.")
+
+    song_path = Path(song_path)
+    if not song_path.exists():
+        raise FileNotFoundError(
+            f"Song not found: {song_path}\n"
+            f"Check the exact filename -- quote it if it has spaces or brackets, e.g.\n"
+            f'  py engine_video_builder.py "songs\\My Track [abc123].mp3" '
+            f'output\\test.mp4 "Artist" "Title" clips')
 
     output_path = Path(output_path)
     project = Project(name=f"{artist} - {title}")

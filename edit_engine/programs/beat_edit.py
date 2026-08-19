@@ -39,6 +39,10 @@ from ..model import Effect, Project, Sequence, Track, make_clip, new_id
 from ..timebase import NEAREST, RationalTime
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".webm", ".m4v", ".avi"}
+#: formats ffmpeg usually cannot open without extra libraries. Reported rather
+#: than silently skipped -- "why is half my artwork missing" is a bad afternoon.
+UNREADABLE_SUFFIXES = {".heic", ".heif", ".avif"}
 
 
 @dataclass
@@ -233,14 +237,36 @@ def build_music_video(project: Project, song_path: str | Path,
     return sequence, stack
 
 
-def collect_visuals(*directories: str | Path) -> List[Path]:
-    """Every usable image/video file under the given directories, sorted."""
+def collect_visuals(*directories: str | Path, kinds: str = "all",
+                    report: Optional[List[str]] = None) -> List[Path]:
+    """Usable visual sources in the given directories, sorted.
+
+    `kinds` is "video", "image" or "all". It matters more than it looks:
+    downloaders drop a .jpg/.webp thumbnail next to every video they fetch, so
+    an unfiltered sweep of a clips folder quietly cuts 27 kB poster frames into
+    the middle of a montage as if they were shots.
+
+    Anything skipped for an unreadable format is appended to `report` so the
+    caller can say so out loud.
+    """
+    if kinds == "video":
+        wanted = VIDEO_SUFFIXES
+    elif kinds == "image":
+        wanted = IMAGE_SUFFIXES
+    else:
+        wanted = IMAGE_SUFFIXES | VIDEO_SUFFIXES
+
     found: List[Path] = []
     for directory in directories:
         path = Path(directory)
         if not path.exists():
             continue
         for candidate in sorted(path.iterdir()):
-            if candidate.suffix.lower() in IMAGE_SUFFIXES | {".mp4", ".mov", ".mkv", ".webm"}:
+            if not candidate.is_file():
+                continue
+            suffix = candidate.suffix.lower()
+            if suffix in wanted:
                 found.append(candidate)
+            elif suffix in UNREADABLE_SUFFIXES and report is not None:
+                report.append(candidate.name)
     return found

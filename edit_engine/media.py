@@ -308,9 +308,16 @@ class MediaRef:
         return self.info is not None and Path(self.path).exists()
 
     def require_info(self) -> MediaInfo:
-        if self.info is None:
-            raise MediaOfflineError(f"media '{self.name or self.media_id}' is offline: {self.path}")
-        return self.info
+        if self.info is not None:
+            return self.info
+        # Distinguish "you gave me a path that does not exist" from "a file the
+        # project used has gone missing". Same state internally, completely
+        # different thing to tell somebody.
+        if not Path(self.path).exists():
+            raise MediaOfflineError(f"file not found: {self.path}")
+        raise MediaOfflineError(
+            f"media '{self.name or self.media_id}' could not be read: {self.path} "
+            f"(unsupported format, or the file is damaged)")
 
     def to_dict(self) -> Dict[str, Any]:
         return {
