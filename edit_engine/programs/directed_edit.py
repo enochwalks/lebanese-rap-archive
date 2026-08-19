@@ -211,6 +211,9 @@ def build_directed_video(project: Project, song_path: str | Path,
     music = analyse_music(song_path, cache)
 
     visual_paths = list(visual_paths)
+    wanted_vision = use_vision and "unavailable" not in backend_note and "disabled" not in backend_note
+    vision_failures: List[str] = []
+
     plans: List[SourcePlan] = []
     for index, path in enumerate(visual_paths, start=1):
         ref = project.import_media(path)
@@ -219,8 +222,18 @@ def build_directed_video(project: Project, song_path: str | Path,
         # looks hung for minutes on a folder of large sources.
         report(f"analysing {index}/{len(visual_paths)}: {ref.name}")
         analysis = None if info.is_still else analyse_clip(ref.path, cache)
-        plans.append(SourcePlan(ref=ref, analysis=analysis,
-                                description=vision.describe(ref.path, analysis)))
+        description = vision.describe(ref.path, analysis)
+        # A per-clip fallback is not a detail. Eleven silent failures look
+        # exactly like eleven successes from the outside.
+        if wanted_vision and description.backend != "claude":
+            vision_failures.append(description.edit_notes)
+        plans.append(SourcePlan(ref=ref, analysis=analysis, description=description))
+
+    if vision_failures:
+        first = vision_failures[0].split(";")[0]
+        backend_note = (f"vision failed on {len(vision_failures)}/{len(visual_paths)} "
+                        f"source(s) -- {first}")
+        report(backend_note)
     if not plans:
         raise ValueError("build_directed_video needs at least one visual source")
     _rank_by_motion(plans)

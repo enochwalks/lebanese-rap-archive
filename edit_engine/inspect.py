@@ -109,6 +109,14 @@ tr:hover td { background:color-mix(in srgb, var(--ink) 4%, transparent); }
        vertical-align:middle; min-width:2px; }
 .byline { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
           color:var(--muted); }
+details.help { background:var(--panel); border:1px solid var(--line); border-radius:12px;
+               box-shadow:var(--shadow); padding:14px 18px; margin:0 0 22px; }
+details.help summary { cursor:pointer; font-weight:600; font-size:.95rem; }
+details.help summary::marker { color:var(--accent); }
+details.help h3 { font-size:.85rem; margin:18px 0 6px; letter-spacing:.02em; }
+details.help p, details.help li { font-size:.87rem; color:var(--muted); margin:4px 0; }
+details.help b { color:var(--ink); font-weight:600; }
+details.help ul { margin:4px 0 0; padding-left:18px; }
 </style>
 </head>
 <body>
@@ -116,6 +124,62 @@ tr:hover td { background:color-mix(in srgb, var(--ink) 4%, transparent); }
   <h1 id="title">Edit report</h1>
   <p class="sub" id="subtitle"></p>
   <div class="card stats" id="stats"></div>
+
+  <details class="help">
+    <summary>How to read this page</summary>
+
+    <h3>The numbers at the top</h3>
+    <ul>
+      <li><b>Shots</b> — how many separate pieces of video are in the edit.</li>
+      <li><b>Median shot</b> — the typical length of one shot. Small number = fast, snappy edit. Big number = slow, calm edit.</li>
+      <li><b>Cuts on beat</b> — how many cuts landed exactly on a drum hit. Higher is tighter to the music. A dash means no beats were found, so nothing could land on one.</li>
+      <li><b>Beats found</b> — how many beats were detected in the song. Zero means beat detection did not run, and the cuts are on a fixed timer instead.</li>
+      <li><b>Tempo</b> — the song's speed in beats per minute.</li>
+      <li><b>Sources</b> — how many different files were used, counting the song.</li>
+    </ul>
+
+    <h3>Direction</h3>
+    <p>The editing decision made for the whole video before any cut was placed:
+    how long shots should be, which camera moves to use, whether to take the busy
+    or the calm part of each clip, and how to order shots against the music.
+    The small grey line above the name says <b>who decided</b> — Claude looking at
+    your footage, or measurements only. If it says measurements, nothing looked at
+    the content, only at movement and brightness.</p>
+
+    <h3>Timeline</h3>
+    <p>The whole video seen from above, left to right in time.</p>
+    <ul>
+      <li><b>V1</b> is the picture. Each coloured block is one shot, numbered. Colour = which file it came from (see the key underneath).</li>
+      <li><b>A1</b> is the sound — the grey bar is your song.</li>
+      <li>Block <b>width</b> = how long that shot lasts. Thin blocks are quick cuts.</li>
+      <li>The thin red marks above the timeline are <b>beats</b>. Tall red marks are beats a cut actually landed on.</li>
+      <li>Hover a block to highlight it; click it to jump to its row in the shot list.</li>
+    </ul>
+
+    <h3>What it saw in the footage</h3>
+    <p>One row per source file — what the editor understood about each clip
+    before using it. <b>Motion</b> is a bar from 0 to 1 comparing your clips to
+    each other: 1.00 is the busiest clip you gave it, 0.00 the stillest. This is
+    what lets loud parts of the song pull the busy clips and quiet parts pull the
+    calm ones.</p>
+
+    <h3>Shot list — and why</h3>
+    <p>Every cut, in order, with the reason behind it.</p>
+    <ul>
+      <li><b>In</b> — where the shot starts in the finished video (hours:minutes:seconds:frames).</li>
+      <li><b>Dur</b> — how long the shot lasts.</li>
+      <li><b>Source</b> — which of your files it came from.</li>
+      <li><b>Reads from</b> — which moment <i>inside</i> that file was used. Not random: it is the most interesting window the analysis could find.</li>
+      <li><b>Energy</b> — how loud the song is at that moment, 0 to 1. This drives the choices on that row.</li>
+      <li><b>Cut</b> — whether that cut landed on a beat.</li>
+      <li><b>Move</b> — the camera move. <b>punch</b> = quick zoom hit, <b>flash</b> = white accent, <b>push</b> = slow zoom, <b>zoom</b> = clean still cut, <b>ken_burns</b> = slow drift for photos.</li>
+      <li><b>Reasoning</b> — the editor explaining itself, in words.</li>
+    </ul>
+
+    <h3>Yellow warning bars</h3>
+    <p>Anything the edit could not do properly. Read these first — they explain
+    most "why does it look wrong" questions.</p>
+  </details>
 
   <div id="direction"></div>
 
