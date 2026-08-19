@@ -99,6 +99,16 @@ tr:hover td { background:color-mix(in srgb, var(--ink) 4%, transparent); }
 .drop.hot { border-color:var(--accent); color:var(--accent); }
 .legend { display:flex; flex-wrap:wrap; gap:14px; margin:10px 0 0; font-size:.8rem;
           color:var(--muted); }
+.dir { border-left:3px solid var(--accent); padding:2px 0 2px 14px; margin:18px 0 0; }
+.dir .name { font-size:1.15rem; font-weight:650; letter-spacing:-.01em; }
+.dir .why { color:var(--muted); font-size:.9rem; margin-top:3px; }
+.dir .params { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+.tagpill { font-size:.72rem; padding:2px 9px; border-radius:20px; border:1px solid var(--line);
+           color:var(--muted); }
+.bar { display:inline-block; height:6px; border-radius:3px; background:var(--accent);
+       vertical-align:middle; min-width:2px; }
+.byline { font-size:.72rem; text-transform:uppercase; letter-spacing:.06em;
+          color:var(--muted); }
 </style>
 </head>
 <body>
@@ -106,6 +116,8 @@ tr:hover td { background:color-mix(in srgb, var(--ink) 4%, transparent); }
   <h1 id="title">Edit report</h1>
   <p class="sub" id="subtitle"></p>
   <div class="card stats" id="stats"></div>
+
+  <div id="direction"></div>
 
   <h2>Timeline</h2>
   <div class="card">
@@ -117,6 +129,7 @@ tr:hover td { background:color-mix(in srgb, var(--ink) 4%, transparent); }
     <div class="legend" id="legend"></div>
   </div>
 
+  <div id="sources"></div>
   <div id="warnings"></div>
 
   <h2>Shot list &mdash; and why</h2>
@@ -124,7 +137,7 @@ tr:hover td { background:color-mix(in srgb, var(--ink) 4%, transparent); }
     <table>
       <thead><tr>
         <th>#</th><th>In</th><th>Dur</th><th>Source</th><th>Reads from</th>
-        <th>Cut</th><th>Move</th><th>Reasoning</th>
+        <th>Energy</th><th>Cut</th><th>Move</th><th>Reasoning</th>
       </tr></thead>
       <tbody id="shots"></tbody>
     </table>
@@ -226,6 +239,49 @@ function render(project){
       audioIds.has(m.media_id) && !vTracks.some(t=>(t.clips||[]).some(c=>c.media_id===m.media_id))
       ? "#8a8f98" : colorOf[m.media_id]}"></i>${esc(m.name)}</span>`).join("");
 
+  // what the director decided, and why
+  const dir = analysis.direction;
+  document.getElementById("direction").innerHTML = !dir ? "" : `
+    <h2>Direction</h2>
+    <div class="card">
+      <div class="dir">
+        <div class="byline">${dir.backend === "claude"
+          ? "decided by Claude from the footage and the song"
+          : "decided from measurements (no content vision)"}</div>
+        <div class="name">${esc(dir.style_name)}</div>
+        <div class="why">${esc(dir.rationale||"")}</div>
+        <div class="params">
+          <span class="tagpill">shot length ×${(+dir.shot_length_bias||1).toFixed(2)}</span>
+          <span class="tagpill">in-points: ${esc(dir.prefer_windows||"")}</span>
+          <span class="tagpill">ordering: ${esc(dir.ordering||"")}</span>
+          <span class="tagpill">moves: ${(dir.preferred_moves||[]).map(esc).join(", ")}</span>
+        </div>
+      </div>
+    </div>`;
+
+  // what it saw in each source
+  const srcs = analysis.sources || [];
+  document.getElementById("sources").innerHTML = !srcs.length ? "" : `
+    <h2>What it saw in the footage</h2>
+    <div class="card scroll"><table>
+      <thead><tr><th>Source</th><th>Subject</th><th>Type</th><th>Mood</th>
+        <th>Pace</th><th>Motion</th><th>Notes</th></tr></thead>
+      <tbody>${srcs.map(sd=>{
+        const base = (sd.path||"").split(/[\\/]/).pop();
+        const rank = +sd.motion_rank;
+        return `<tr>
+          <td>${esc(base)}</td>
+          <td>${esc(sd.subject||"")}</td>
+          <td>${esc(sd.scene_type||"")}</td>
+          <td>${esc(sd.mood||"")}</td>
+          <td>${esc(sd.pace||"")}</td>
+          <td>${isFinite(rank)
+              ? `<span class="bar" style="width:${Math.round(rank*60)+2}px"></span>
+                 <span class="mono"> ${rank.toFixed(2)}</span>` : "—"}</td>
+          <td class="why">${esc(sd.edit_notes||"")}</td>
+        </tr>`; }).join("")}
+      </tbody></table></div>`;
+
   // warnings
   const notes = [];
   if(!hasBeats) notes.push(
@@ -251,6 +307,9 @@ function render(project){
       <td class="mono">${dur(c).toFixed(2)}s</td>
       <td><i class="swatch" style="background:${colorOf[c.media_id]}"></i>${esc(src?src.name:c.media_id)}</td>
       <td class="mono">${frac(c.source_range.start_time).toFixed(2)}s</td>
+      <td>${d.music_energy==null ? "—" :
+          `<span class="bar" style="width:${Math.round(d.music_energy*40)+2}px"></span>
+           <span class="mono"> ${(+d.music_energy).toFixed(2)}</span>`}</td>
       <td>${beat}</td>
       <td>${fx?esc(fx.kind):"—"}</td>
       <td class="why">${esc(d.effect_reason||"")}${d.source_reason?"<br>"+esc(d.source_reason):""}${

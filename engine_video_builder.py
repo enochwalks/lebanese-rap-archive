@@ -50,6 +50,7 @@ from edit_engine import Project, Sequence
 from edit_engine.edl import to_edl
 from edit_engine.inspect import write_report
 from edit_engine.programs.beat_edit import BeatEditStyle, build_music_video, collect_visuals
+from edit_engine.programs.directed_edit import build_directed_video
 from edit_engine.render import FFmpegRenderer, RenderSettings, compile_plan
 
 BASE_DIR = Path(__file__).parent
@@ -93,7 +94,8 @@ def _visual_sources(style: str, anime_clip_path: str = "") -> List[Path]:
 def build_video(song_path, anime_clip_path, output_path, artist, title, release_date,
                 logo_path=None, style: str = "clips", seed: Optional[int] = None,
                 save_project: bool = True, export_edl: bool = True,
-                write_html_report: bool = True, progress: bool = True):
+                write_html_report: bool = True, progress: bool = True,
+                directed: bool = True, use_vision: bool = True):
     """Build and render one video. Signature matches video_builder.build_video.
 
     Alongside the video it writes, unless asked not to:
@@ -121,12 +123,22 @@ def build_video(song_path, anime_clip_path, output_path, artist, title, release_
         name=f"{artist} - {title}", rate=FPS, width=VIDEO_WIDTH, height=VIDEO_HEIGHT))
 
     intro = BASE_DIR / "intro_video.mp4"
-    sequence, stack = build_music_video(
-        project, song_path, _visual_sources(style, str(anime_clip_path or "")),
-        sequence=sequence, style=BeatEditStyle(),
-        intro_path=intro if intro.exists() else None,
-        seed=seed, name=f"{artist} - {title}",
-    )
+    sources = _visual_sources(style, str(anime_clip_path or ""))
+    common = dict(sequence=sequence, style=BeatEditStyle(),
+                  intro_path=intro if intro.exists() else None,
+                  seed=seed, name=f"{artist} - {title}")
+
+    if directed:
+        print(f"[engine] analysing {len(sources)} source(s)"
+              + (" and asking Claude what they are" if use_vision else ""))
+        sequence, stack = build_directed_video(
+            project, song_path, sources, use_vision=use_vision,
+            cache_path=BASE_DIR / ".analysis_cache.json", **common)
+        direction = sequence.metadata["analysis"]["direction"]
+        print(f"[engine] direction: {direction['style_name']} "
+              f"({direction['backend']}) -- {direction['rationale']}")
+    else:
+        sequence, stack = build_music_video(project, song_path, sources, **common)
 
     problems = sequence.validate(project.registry)
     if problems:
@@ -175,4 +187,7 @@ if __name__ == "__main__":
     song, out, artist_arg, title_arg = args[:4]
     style_arg = args[4] if len(args) > 4 else "clips"
     seed_arg = int(args[5]) if len(args) > 5 else None
-    build_video(song, "", out, artist_arg, title_arg, "", style=style_arg, seed=seed_arg)
+    # --blind skips analysis entirely; --no-vision analyses but never calls the API
+    build_video(song, "", out, artist_arg, title_arg, "", style=style_arg, seed=seed_arg,
+                directed="--blind" not in args,
+                use_vision="--no-vision" not in args and "--blind" not in args)

@@ -106,12 +106,17 @@ edit_engine/
 │                     roll, slip, slide, retime, link, markers
 ├── edl.py            CMX3600 export, so an auto-cut can be finished by a human
 ├── inspect.py        standalone HTML report: the timeline and every decision
+├── analysis/         look at the footage, listen to the song, decide the approach
+│   ├── media.py      motion, exposure, internal cuts, best in-point per clip
+│   ├── music.py      beats (librosa) + energy envelope (ffmpeg only)
+│   └── vision.py     Claude sees the footage and directs; measurement fallback
 ├── render/
 │   ├── plan.py       timeline -> RenderPlan (pure, testable, backend-agnostic)
 │   ├── ffmpeg.py     RenderPlan -> one ffmpeg pass
 │   └── effects.py    per-clip effect registry (punch, ken burns, fade, colour…)
 └── programs/
-    └── beat_edit.py  builds a beat-synced music-video timeline
+    ├── beat_edit.py      beat-synced cuts, everything else random
+    └── directed_edit.py  cuts directed by what the footage and song actually are
 ```
 
 ### Using it
@@ -160,6 +165,41 @@ It also tells you when it is flying blind: no beat data means the cut fell
 back to a fixed interval, and the page says so in as many words rather than
 reporting a meaningless "cuts on beat" percentage.
 
+### The directed edit
+
+`beat_edit` cuts accurately and picks everything else at random — which clip,
+which moment inside it, which move. `directed_edit` keeps the accuracy and
+removes the blindness:
+
+- **It looks at the footage.** One ffmpeg pass per source measures motion,
+  exposure and the cuts already inside it. In-points then land on the
+  interesting part of a clip instead of a random one — the single most visible
+  weakness of random selection.
+- **It listens past the beat.** Beats say *where* a cut may land; the energy
+  envelope says *what kind of cut it should be*. Quiet passages get long holds
+  and gentle pushes, drops get short shots and hard accents.
+- **It matches footage to the moment.** Loud passages pull the busier clips,
+  quiet ones the stiller. Measured across seeds, loud passages select footage
+  at motion rank 0.91 against 0.47 for quiet ones.
+- **Claude directs; the engine executes.** The model sees a few frames of each
+  source plus the song's tempo, and returns a description of each clip and one
+  editorial direction — shot length against the beat, which moves suit this
+  material, which part of each clip to pull, how to order against energy. It
+  never places a frame. Placement stays deterministic, seeded, undoable and
+  frame-exact.
+
+```
+py engine_video_builder.py songs\track.mp3 output\test.mp4 "Artist" "Title" clips 42
+py engine_video_builder.py ... --no-vision     # analyse, but never call the API
+py engine_video_builder.py ... --blind         # the old random behaviour
+```
+
+Vision costs one API call per *source file*, cached on disk forever, plus one
+director call per video. Ten clips cost eleven calls the first time and one
+after that. With no key, no SDK, or a failed call, it falls back to directing
+from measurements alone and the report says so rather than implying the model
+saw something it did not.
+
 ### What it guarantees
 
 * **Frame accuracy.** All time is exact rationals (`30000/1001`, not `29.97`),
@@ -205,9 +245,16 @@ pip install -r requirements-dev.txt
 python -m pytest tests/ -q
 ```
 
-124 tests. The render tests need `ffmpeg`/`ffprobe` on PATH and skip
+161 tests. The render tests need `ffmpeg`/`ffprobe` on PATH and skip
 themselves if it is missing; everything else runs on the standard library
-alone.
+alone. The Claude backends are tested against an injected fake client, so
+request shape and response parsing are covered without a network call.
+
+Optional extras (beat detection, content vision):
+
+```
+pip install -r requirements-optional.txt
+```
 
 ## Important reminder — permission gating
 
