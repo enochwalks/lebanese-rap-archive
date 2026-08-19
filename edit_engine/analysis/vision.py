@@ -213,6 +213,23 @@ _DIRECT_SCHEMA = {
 }
 
 
+def _friendly(message: str) -> str:
+    """Turn an API error into something worth reading in a terminal."""
+    lowered = message.lower()
+    if "credit balance" in lowered:
+        return ("your Anthropic account has no API credits -- add them at "
+                "console.anthropic.com under Plans & Billing (a Claude.ai "
+                "subscription is separate and does not cover API use)")
+    if "authentication_error" in lowered or "invalid x-api-key" in lowered:
+        return ("the API key was rejected -- check ANTHROPIC_API_KEY is set to a "
+                "complete, current key")
+    if "permission_error" in lowered:
+        return "this API key is not permitted to use that model"
+    if "rate_limit" in lowered:
+        return "rate limited by the API; try again shortly"
+    return message
+
+
 def _client():
     try:
         import anthropic
@@ -226,12 +243,19 @@ def _client():
 class ClaudeVision:
     """Show Claude a few frames of each source and ask what it is."""
 
+    #: errors that are about the account, not about this clip. Retrying them
+    #: once per source just burns time -- eleven identical failures tell you
+    #: nothing the first one did not.
+    FATAL_MARKERS = ("credit balance", "authentication_error", "invalid x-api-key",
+                     "permission_error", "api key")
+
     def __init__(self, model: str = MODEL, frames: int = 3,
                  cache: Optional[AnalysisCache] = None):
         self.model = model
         self.frames = frames
         self.cache = cache
         self._client = None
+        self._giving_up: Optional[str] = None
 
     def describe(self, path: str, analysis: Optional[ClipAnalysis]) -> SourceDescription:
         if self.cache is not None:
@@ -252,6 +276,11 @@ class ClaudeVision:
 
     def _describe_uncached(self, path: str,
                            analysis: Optional[ClipAnalysis]) -> SourceDescription:
+        if self._giving_up is not None:
+            fallback = MeasurementVision().describe(path, analysis)
+            fallback.edit_notes = f"vision unavailable ({self._giving_up}); {fallback.edit_notes}"
+            return fallback
+
         images = sample_frames(path, count=self.frames)
         if not images:
             return MeasurementVision().describe(path, analysis)
@@ -293,8 +322,12 @@ class ClaudeVision:
             text = next(b.text for b in response.content if b.type == "text")
             data = json.loads(text)
         except Exception as error:                       # noqa: BLE001
+            message = str(error)
+            if any(marker in message.lower() for marker in self.FATAL_MARKERS):
+                self._giving_up = _friendly(message)
             fallback = MeasurementVision().describe(path, analysis)
-            fallback.edit_notes = f"vision unavailable ({error}); {fallback.edit_notes}"
+            reason = self._giving_up or message
+            fallback.edit_notes = f"vision unavailable ({reason}); {fallback.edit_notes}"
             return fallback
 
         data["path"] = path
@@ -347,7 +380,8 @@ class ClaudeDirector:
             data = json.loads(next(b.text for b in response.content if b.type == "text"))
         except Exception as error:                       # noqa: BLE001
             fallback = HeuristicDirector().direct(descriptions, music)
-            fallback.rationale = f"director unavailable ({error}); {fallback.rationale}"
+            fallback.rationale = (f"director unavailable ({_friendly(str(error))}); "
+                                  f"{fallback.rationale}")
             return fallback
 
         data["backend"] = "claude"

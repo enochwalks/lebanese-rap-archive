@@ -348,3 +348,54 @@ class TestCapabilityHonesty:
         recorded = sequence.metadata["analysis"]
         assert "disabled" in recorded["backend_note"]
         assert recorded["beats_available"] is False
+
+
+class TestFatalErrorsStopEarly:
+    """Regression: an account-level failure (no credits, bad key) was retried
+    once per source. Eleven identical failures tell you nothing the first one
+    did not, and each one costs a round trip."""
+
+    def backend_that_fails(self, message, monkeypatch):
+        from edit_engine.analysis import vision as vision_module
+        monkeypatch.setattr(vision_module, "sample_frames", lambda *a, **k: [b"\xff\xd8"])
+        attempts = []
+
+        class Boom:
+            class messages:
+                @staticmethod
+                def create(**kwargs):
+                    attempts.append(1)
+                    raise RuntimeError(message)
+
+        backend = ClaudeVision()
+        backend._client = Boom()
+        return backend, attempts
+
+    def test_credit_failure_is_attempted_once_for_many_clips(self, monkeypatch):
+        backend, attempts = self.backend_that_fails(
+            "Error code: 400 - {'message': 'Your credit balance is too low'}", monkeypatch)
+        for index in range(11):
+            backend.describe(f"clip{index}.mp4", analysis(0.02))
+        assert len(attempts) == 1
+
+    def test_bad_key_is_attempted_once(self, monkeypatch):
+        backend, attempts = self.backend_that_fails(
+            "Error code: 401 - {'type': 'authentication_error'}", monkeypatch)
+        for index in range(5):
+            backend.describe(f"clip{index}.mp4", analysis(0.02))
+        assert len(attempts) == 1
+
+    def test_a_per_clip_failure_keeps_trying_the_rest(self, monkeypatch):
+        """A clip-specific problem must not disable vision for the whole run."""
+        backend, attempts = self.backend_that_fails(
+            "Error code: 500 - {'type': 'api_error'}", monkeypatch)
+        for index in range(5):
+            backend.describe(f"clip{index}.mp4", analysis(0.02))
+        assert len(attempts) == 5
+
+    def test_errors_are_translated_for_humans(self):
+        from edit_engine.analysis.vision import _friendly
+        assert "no API credits" in _friendly("Your credit balance is too low")
+        assert "Claude.ai subscription is separate" in _friendly("credit balance too low")
+        assert "complete, current key" in _friendly("authentication_error: bad key")
+        assert _friendly("something unexpected") == "something unexpected"
