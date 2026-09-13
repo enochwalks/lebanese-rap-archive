@@ -121,6 +121,12 @@ input[type=search]{cursor:text;min-width:190px}
 .snowbar .me{position:absolute;left:0;right:0;border-top:2px solid #f59e0b}
 .snowbar .tag{position:absolute;font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.55)}
 
+.viz{display:flex;align-items:flex-end;gap:2px;height:74px;margin:6px 0 12px;padding:6px;
+     border-radius:var(--r2);background:linear-gradient(180deg,#1c2b4d,#0f1830);border:1px solid var(--line)}
+.viz i{flex:1;min-height:2px;display:block;border-radius:2px 2px 0 0;background:var(--watch)}
+.viz.empty{align-items:center;justify-content:center;color:var(--tx3);font-size:12px}
+.seastate{display:flex;gap:6px;align-items:baseline}
+
 /* ---------- timeline ---------- */
 .scroller{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
 .hours{display:flex;gap:7px;min-width:min-content}
@@ -234,8 +240,8 @@ footer a{color:var(--tx2)}
   </div>
 
   <div class="card mtn" id="mtnCard">
-    <h2>Mountain conditions</h2>
-    <div class="snowbar" id="snowbar"></div>
+    <h2 id="profTitle">Conditions</h2>
+    <div id="profViz"></div>
     <div id="mtnRows"></div>
   </div>
 </div>
@@ -462,6 +468,13 @@ function hourThreat(h, elevation){
   else if(p >= 2) add(2,"steady rain");
   else if(p >= 0.5) add(1,"showers");
 
+  // --- squall: a gust far above the sustained wind is what tears off shutters ---
+  if(g >= 60 && h.wind && g >= h.wind * 1.8) add(3,"squall");
+
+  // --- lightning potential (CAPE with rain actually falling) ---
+  if((h.cape||0) >= 2500 && p >= 1) add(4,"frequent lightning");
+  else if((h.cape||0) >= 1200 && p >= 0.5) add(3,"lightning");
+
   // --- thunder / hail ---
   if(h.code === 99) add(5,"severe thunderstorm + hail");
   else if(h.code === 96) add(4,"thunderstorm + hail");
@@ -501,6 +514,7 @@ function hourThreat(h, elevation){
     if(h.code >= 95) kind = "thunderstorm";
     else if(s >= 1) kind = "snowstorm";
     else if(h.code===66||h.code===67||h.code===56||h.code===57 || mixRisk) kind = "ice storm";
+    else if(g >= 70 && h.dir != null && h.dir >= 200 && h.dir <= 340) kind = "sea gale";
     else if(g >= 70 && p < 2) kind = "windstorm";
     else if(p >= 5) kind = "rainstorm";
     else if(h.vis != null && h.vis < 800 && p < 1) kind = "fog";
@@ -510,7 +524,7 @@ function hourThreat(h, elevation){
 }
 
 const KIND_ICON = {
-  "thunderstorm":"⛈️", "snowstorm":"❄️", "blizzard":"🌨️", "ice storm":"🧊",
+  "thunderstorm":"⛈️", "sea gale":"🌊", "snowstorm":"❄️", "blizzard":"🌨️", "ice storm":"🧊",
   "windstorm":"💨", "rainstorm":"🌧️", "fog":"🌫️", "unsettled":"🌥️", "storm":"🌀"
 };
 
@@ -623,6 +637,25 @@ function packHours(d, nowSite){
   return out;
 }
 
+/* the sea, for coastal places. Open-Meteo's marine grid only covers water,
+   so we sample a point a few km offshore rather than the village itself. */
+async function loadMarine(p){
+  STATE.marine = null;
+  try{
+    const q = new URLSearchParams({
+      latitude: p.lat, longitude: (p.lon - 0.06).toFixed(4),
+      hourly: "wave_height,wave_period,wave_direction,swell_wave_height,swell_wave_period,sea_surface_temperature",
+      timezone: "Asia/Beirut", forecast_days: "5"
+    });
+    const d = await getJSON("https://marine-api.open-meteo.com/v1/marine?" + q.toString(), 1);
+    if(!d.hourly || !d.hourly.time) return;
+    STATE.marine = d;
+    if(STATE.data) renderProfile(STATE.data, STATE.hours, STATE.elevation);   // fill the card in late
+  }catch(e){ /* inland, or the marine model has no cell here — the card just omits the sea */ }
+}
+const seaWords = m => m < 0.3 ? "glassy" : m < 0.6 ? "calm" : m < 1.25 ? "slight" :
+                       m < 2.5 ? "moderate" : m < 4 ? "rough" : "very rough";
+
 /* ============================================================
    6. RENDER
    ============================================================ */
@@ -638,7 +671,7 @@ function render(place, d){
   renderHero(events, nowSite, place, scored);
   renderAdvisor(scored, events, elevation, place, nowSite);
   renderNow(d, place, elevation, scored);
-  renderMountain(d, scored, elevation);
+  renderProfile(d, scored, elevation);
   renderHours(scored.slice(0,48), nowSite);
   renderEvents(events, nowSite, elevation);
   renderDays(d);
@@ -723,6 +756,68 @@ function renderNow(d, place, elevation, scored){
     (s[2] ? '<div class="n">' + esc(s[2]) + '</div>' : '') + '</div>').join("");
 }
 
+/* below 400 m the mountain numbers are noise — show the coast's storms instead */
+function renderProfile(d, scored, elevation){
+  if(elevation < 400) renderCoast(d, scored, elevation);
+  else { $("#profTitle").textContent = "Mountain conditions"; renderMountain(d, scored, elevation); }
+}
+
+function rainViz(hrs){
+  if(!hrs.length) return '<div class="viz empty">no hourly data</div>';
+  const maxP = Math.max(1, Math.max.apply(null, hrs.map(h => h.precip||0)));
+  return '<div class="viz">' + hrs.map(h => {
+    const col = h.code >= 95 ? "var(--ext)" : (h.precip||0) >= 5 ? "var(--sev)" :
+                (h.precip||0) >= 2 ? "var(--warn)" : (h.gust||0) >= 60 ? "var(--adv)" : "var(--watch)";
+    const ht = clamp(((h.precip||0)/maxP)*100, (h.gust||0) >= 60 ? 12 : 2, 100);
+    return '<i style="height:' + ht + '%;background:' + col + '" title="' + hh(h.t) + " " + dayName(h.t) +
+           ": " + r1(h.precip||0) + ' mm, gust ' + Math.round(h.gust||0) + ' km/h"></i>';
+  }).join("") + '</div>';
+}
+
+function renderCoast(d, scored, elevation){
+  $("#profTitle").innerHTML = "Storm &amp; sea · العاصفة والبحر";
+  $("#profViz").className = "";                       // shed the mountain diagram's styling
+  if(!scored.length){ $("#mtnRows").innerHTML = '<div class="muted">No hourly data.</div>'; return; }
+  const s = summarise(scored, STATE.events, elevation, STATE.nowSite);
+  $("#profViz").innerHTML = rainViz(scored.slice(0,48));
+
+  const dirNow = scored[0].dir, onshoreNow = dirNow >= 200 && dirNow <= 340;
+  const rows = [
+    ["Rain · next 24 h", s.rain24 + " mm" + (s.rain24 >= 40 ? " ⚠️" : "")],
+    ["Heaviest 3 hours", s.rain3h + " mm" + (s.rain3h >= 25 ? " ⚠️ flooding" : "")],
+    ["Peak rain rate", s.rainRate + " mm/h"],
+    ["Lightning hours · 72 h", Math.max(s.thunderHours, s.lightningHours) + (s.thunderHours ? " ⚡" : "")],
+    ["Peak gust · 72 h", s.gust72 + " km/h" + (s.onshoreGust ? " · onshore " + s.onshoreGust : "")],
+    ["Wind now", Math.round(scored[0].wind) + " km/h " + arrow(dirNow) + " " + compass(dirNow) +
+      (onshoreNow ? " (off the sea)" : " (off the land)")],
+    ["Squalls expected", s.squall ? "yes ⚠️" : "no"],
+    ["Pressure · next 24 h", (s.pressDrop < 0 ? s.pressDrop : "+" + s.pressDrop) + " hPa" +
+      (s.pressDrop <= -8 ? " · deepening low" : s.pressDrop <= -4 ? " · falling" : "")]
+  ];
+
+  const M = STATE.marine;
+  if(M && M.hourly && M.hourly.wave_height){
+    const H = M.hourly, now = STATE.nowSite;
+    let i0 = 0;
+    for(let i = 0; i < H.time.length; i++){ if(ts(H.time[i]) >= now - 3600000){ i0 = i; break; } }
+    const win = H.wave_height.slice(i0, i0 + 48).filter(v => v != null);
+    const nowW = H.wave_height[i0], peak = win.length ? Math.max.apply(null, win) : null;
+    const sst = H.sea_surface_temperature ? H.sea_surface_temperature[i0] : null;
+    const per = H.wave_period ? H.wave_period[i0] : null;
+    const swell = H.swell_wave_height ? H.swell_wave_height[i0] : null;
+    if(nowW != null) rows.push(["Sea now", r1(nowW) + " m · " + seaWords(nowW) +
+      (per != null ? " · " + Math.round(per) + " s" : "")]);
+    if(peak != null) rows.push(["Biggest waves · 48 h", r1(peak) + " m · " + seaWords(peak) +
+      (peak >= 2.5 ? " ⚠️" : "")]);
+    if(swell != null) rows.push(["Swell", r1(swell) + " m"]);
+    if(sst != null) rows.push(["Sea temperature", r1(sst) + " °C"]);
+  } else {
+    rows.push(["Sea", "wave data not loaded for this point"]);
+  }
+  $("#mtnRows").innerHTML = rows.map(r =>
+    '<div class="row"><span class="lbl">' + esc(r[0]) + '</span><span class="val">' + esc(r[1]) + '</span></div>').join("");
+}
+
 function renderMountain(d, scored, elevation){
   if(!scored.length){ $("#mtnRows").innerHTML = '<div class="muted">No hourly data for this point.</div>'; return; }
   const next24 = scored.slice(0,24), next72 = scored.slice(0,72);
@@ -737,7 +832,7 @@ function renderMountain(d, scored, elevation){
 
   // snow-line diagram: 0 m at bottom, 3200 m at top
   const pct = m => clamp(100 - (m/3200)*100, 0, 100);
-  const sb = $("#snowbar");
+  const sb = $("#profViz"); sb.className = "snowbar";
   const flTop = fl != null ? pct(fl) : null;
   sb.innerHTML =
     (flTop != null ? '<div class="zone" style="top:0;height:' + flTop + '%"></div>' +
@@ -821,7 +916,19 @@ function summarise(scored, events, elevation, now){
   const sum = (a,k) => a.reduce((s,x) => s + (x[k]||0), 0);
   const max = (a,k) => a.length ? Math.max.apply(null, a.map(x => x[k]||0)) : 0;
   const flMin = h72.length ? Math.min.apply(null, h72.map(x => x.fl == null ? 99999 : x.fl)) : 99999;
+  // heaviest 3 consecutive hours of rain — how coastal roads and underpasses flood
+  let rain3h = 0;
+  for(let i = 0; i + 2 < h72.length; i++)
+    rain3h = Math.max(rain3h, (h72[i].precip||0) + (h72[i+1].precip||0) + (h72[i+2].precip||0));
+  const onshore = h72.filter(x => x.dir != null && x.dir >= 200 && x.dir <= 340 && (x.gust||0) >= 60);
   return {
+    rain3h: r1(rain3h),
+    rainRate: r1(max(h72,"precip")),
+    thunderHours: h72.filter(x => x.code >= 95).length,
+    lightningHours: h72.filter(x => (x.cape||0) >= 1200 && (x.precip||0) >= 0.5).length,
+    onshoreGust: onshore.length ? Math.round(Math.max.apply(null, onshore.map(x => x.gust))) : 0,
+    squall: h72.some(x => (x.gust||0) >= 60 && x.wind && x.gust >= x.wind * 1.8),
+    pressDrop: h72.length > 12 && h72[0].slp != null ? r1(Math.min.apply(null, h72.slice(0,24).map(x => x.slp)) - h72[0].slp) : 0,
     gust72: Math.round(max(h72,"gust")), gust24: Math.round(max(h24,"gust")),
     rain24: r1(sum(h24,"rain")), rain72: r1(sum(h72,"rain")),
     snow24: r1(sum(h24,"snow")), snow72: r1(sum(h72,"snow")),
@@ -897,11 +1004,26 @@ function advise(scored, events, elevation, place, now){
     A(s.gust72 >= 100 ? 3 : 2,"💨","<b>Gusts to " + s.gust72 + " km/h.</b> Tie down the water tank and solar panels, take in the awning and anything plastic, and park away from big trees and old walls.","before the wind");
   if(s.gust72 >= 60)
     A(1,"🔌","Expect EDL cuts and generator trips at this wind speed. Unplug what matters.","during");
+  if(s.rain3h >= 25)
+    A(3,"🌧️","<b>" + s.rain3h + " mm in three hours.</b> That is the amount that floods the Jbeil–Beirut coastal road, " +
+      "the underpasses and any ground-floor garage. Move the car up and keep off the highway while it falls.","during the burst");
+  if(s.onshoreGust >= 70)
+    A(3,"🌊","<b>Onshore gale, gusts " + s.onshoreGust + " km/h off the sea.</b> Waves come over the corniche and the rocks. " +
+      "Pull boats up, clear the terrace, and stay off the seafront — people are swept off those rocks every winter.","during the storm");
+  if(s.squall)
+    A(2,"💨","<b>Squalls.</b> Sudden gusts nearly twice the steady wind — this is what rips shutters, awnings and satellite dishes off, " +
+      "not the average wind speed.","during the storm");
+  if(s.lightningHours >= 2 || s.thunderHours >= 2)
+    A(2,"⚡","<b>" + Math.max(s.lightningHours, s.thunderHours) + " hours of lightning risk.</b> Unplug the router, TV and inverter — " +
+      "a near strike takes them out through the mains, and the generator changeover too.","during the storm");
+  if(s.pressDrop <= -8)
+    A(1,"📉","Pressure dropping " + Math.abs(s.pressDrop) + " hPa in 24 h — a deepening low (a Cyprus low, usually). " +
+      "Expect it to arrive faster and harder than it looks now.","watch it");
   if(s.rain24 >= 30 || s.wetDay >= 12)
-    A(3,"🌊","<b>" + s.rain24 + " mm in 24 h.</b> Clear the roof drains and the mazareeb now; valley roads flood and cut slopes slide when it comes this fast.","today");
+    A(3,"🧹","<b>" + s.rain24 + " mm in 24 h.</b> Clear the roof drains and the mazareeb now; valley roads flood and cut slopes slide when it comes this fast.","today");
   else if(s.rain24 >= 12)
     A(1,"☔","Heavy enough to flood a blocked gutter. Worth a two-minute check.","today");
-  if(s.thunder)
+  if(s.hail || (s.thunder && s.lightningHours < 2 && s.thunderHours < 2))
     A(s.hail ? 3 : 2, s.hail ? "🧊" : "⛈️", s.hail
       ? "<b>Hail possible.</b> Get the car under cover and protect the seedlings and vines."
       : "Thunderstorms — unplug the TV and router, and stay off the ridges and open ground.","during the storm");
@@ -909,8 +1031,12 @@ function advise(scored, events, elevation, place, now){
     A(1,"🌫️","Thick cloud sitting on the mountain for about " + s.fogHours + " hours. Fog lights, and slow on the hairpins.","when driving");
 
   const bw = bestWindow(scored, now);
-  if(bw) A(0,"✅","<b>Your clear window:</b> " + dayName(bw.start) + " " + hh(bw.start) + " → " + hh(bw.end) +
-            " is calm and dry. That is the time for the roof, the car, the wood, the drive.","plan for it");
+  if(bw){
+    const sameDay = dayName(bw.start) === dayName(bw.end);
+    A(0,"✅","<b>Your clear window:</b> " + dayName(bw.start) + " " + hh(bw.start) + " → " +
+      (sameDay ? "" : dayName(bw.end) + " ") + hh(bw.end) +
+      " is calm and dry. That is the time for the roof, the car, the wood, the drive.","plan for it");
+  }
   if(!acts.length) A(0,"🌤️","Nothing to prepare. Enjoy it.","");
 
   acts.sort((a,b) => b.p - a.p);
@@ -1173,6 +1299,7 @@ async function load(place, opts){
     syncSelect(place);
     render(place, d);
     initMap(place);
+    if((d.elevation != null ? d.elevation : place.el || 0) < 400) loadMarine(place);
     try{ localStorage.setItem("lsw:place", JSON.stringify(place)); }catch(e){}
   }catch(e){
     if(mine !== reqId) return;

@@ -18,7 +18,8 @@ at your own altitude**.
 |---|---|
 | Storm outlook | The next storm, a countdown to it, its peak severity and how long it lasts |
 | Right now | Temperature, wind + gusts, humidity, cloud, and the 3-hour pressure trend (falling fast = a system is closing in) |
-| Mountain conditions | Snow line vs. **your** elevation, rain/sleet/snow call, new snow in 24 h and 72 h, snow already on the ground, coldest hour, strongest gust, and how many icy-road hours are coming |
+| Storm & sea (below 400 m) | Rain in 24 h, the heaviest 3 hours (the flooding number), peak rain rate, lightning hours, peak and onshore gusts, squalls, 24 h pressure trend, and live wave height, swell, period and sea temperature from the Open-Meteo marine model |
+| Mountain conditions (above 400 m) | Snow line vs. **your** elevation, rain/sleet/snow call, new snow in 24 h and 72 h, snow already on the ground, coldest hour, strongest gust, and how many icy-road hours are coming |
 | Next 48 hours | Hour-by-hour strip, colour-coded by threat, with a gust bar under each hour |
 | Incoming storms | Every storm event in the next 10 days, grouped and ranked, with rain/snow totals and hazard tags |
 | 10-day outlook | Daily summary |
@@ -54,14 +55,20 @@ changes with it.
 ## Storm levels
 
 `Calm → Watch → Advisory → Warning → Severe → Extreme`, scored per hour from wind gusts,
-rain rate, thunderstorm and hail codes, snowfall rate, freezing rain, the freezing-level
-height relative to your altitude, visibility and CAPE (storm energy). Adjacent threat hours
+rain rate, thunderstorm and hail codes, **squalls** (a gust far above the sustained wind),
+**lightning potential** (CAPE with rain actually falling), snowfall rate, freezing rain, the
+freezing-level height relative to your altitude, and visibility. Adjacent threat hours
 are merged into one named event (thunderstorm, snowstorm, blizzard, ice storm, windstorm,
-rainstorm, fog).
+rainstorm, **sea gale**, fog).
+
+The card under the forecast adapts to where you are: on the coast it drops the snow line and
+shows what actually hits there — three-hour rain totals, squalls, onshore gales and the sea
+state; above 400 m it switches back to snow line, snow totals and icy roads.
 
 ## Data
 
 * Forecast — [Open-Meteo](https://open-meteo.com) (ICON / ECMWF / GFS blend), free, no key.
+* Sea — Open-Meteo marine model, sampled a few km offshore (it has no grid cell over land).
 * Radar — [RainViewer](https://rainviewer.com). Basemap — OpenStreetMap / CARTO.
 
 These levels are computed by this app from raw model output. They are **not** official
