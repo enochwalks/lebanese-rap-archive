@@ -1,0 +1,2 @@
+# PowerShell scripts must keep CRLF and are never normalised to LF.
+*.ps1 text eol=crlf

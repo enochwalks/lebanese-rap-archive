@@ -1,4 +1,4 @@
-# Runs any sigfilter command inside the project's virtual environment.
+﻿# Runs any sigfilter command inside the project's virtual environment.
 #   .\run.ps1 login
 #   .\run.ps1 channels
 #   .\run.ps1 watch

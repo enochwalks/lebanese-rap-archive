@@ -1,4 +1,4 @@
-# Windows setup for sigfilter.
+﻿# Windows setup for sigfilter.
 # Run it from this folder:   .\setup.ps1
 # It builds a private virtual environment, so "pip is not recognized" can't happen.
 
@@ -42,7 +42,7 @@ Write-Host "Installing dependencies (takes a minute)..."
 & $venvPy -m pip install --quiet -r requirements.txt
 Write-Host "Dependencies installed." -ForegroundColor Green
 
-# 3. Config files, only if they don't exist yet — never overwrite your edits.
+# 3. Config files, only if they don't exist yet - never overwrite your edits.
 if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
     Write-Host "Created .env" -ForegroundColor Green
@@ -63,7 +63,7 @@ Write-Host ""
 Write-Host "1. Get your Telegram API keys at https://my.telegram.org"
 Write-Host "   (log in with your phone number -> API development tools)"
 Write-Host ""
-Write-Host "2. Put them in .env — opening it now in Notepad."
+Write-Host "2. Put them in .env - opening it now in Notepad."
 Write-Host ""
 Write-Host "3. Then run these, one line at a time:"
 Write-Host "       .\run.ps1 login" -ForegroundColor Yellow
@@ -72,4 +72,6 @@ Write-Host "   Copy the channel ids into config.yaml, then:"
 Write-Host "       .\run.ps1 watch" -ForegroundColor Yellow
 Write-Host ""
 
-Start-Process notepad ".env"
+# Absolute path: Start-Process resolves relative paths against the process
+# working directory, which is not necessarily this folder.
+Start-Process notepad (Join-Path $PSScriptRoot ".env")
