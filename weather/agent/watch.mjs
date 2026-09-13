@@ -71,6 +71,12 @@ function packHours(d, nowSite){
 }
 
 /* ---------- GitHub ---------- */
+/* A manual run may lower the bar to prove the alerts actually reach a phone.
+   Empty env vars (every scheduled run) fall through to config.json. */
+const LEVEL   = Number(process.env.ALERT_LEVEL   || cfg.alertLevel   || 3);
+const HORIZON = Number(process.env.HORIZON_HOURS || cfg.horizonHours || 48);
+const DRILL   = !!(process.env.ALERT_LEVEL || process.env.HORIZON_HOURS);
+
 const TOKEN = process.env.GITHUB_TOKEN;
 const REPO  = process.env.GITHUB_REPOSITORY;
 const LABEL = "storm-watch";
@@ -125,6 +131,13 @@ function issueBody(place, elevation, e, a, now, d){
       r1(D.snowfall_sum[i]) + " cm | " + Math.round(D.wind_gusts_10m_max[i]) + " km/h |");
   }
   lines.push("");
+  if(DRILL){
+    lines.push("> ⚙️ **This is a test.** The run was started by hand with the alert level lowered to " +
+      LEVEL + " and a " + HORIZON + " h horizon, to check that alerts reach your phone. " +
+      "The weather in it is real; it is simply below the level you normally want to hear about. " +
+      "Scheduled runs are unaffected.");
+    lines.push("");
+  }
   lines.push("<sub>Open-Meteo forecast, scored by Lebanon Storm Watch. Not an official warning — " +
              "for danger to life follow Civil Defence (125).</sub>");
   lines.push("");
@@ -150,8 +163,8 @@ async function run(){
     const worth = events.filter(e => {
       if(e.end <= nowSite) return false;
       const inH = (e.start - nowSite) / 3600000;
-      if(e.peak >= 4) return inH <= (cfg.severeHorizonHours ?? 96);
-      return e.peak >= (cfg.alertLevel ?? 3) && inH <= (cfg.horizonHours ?? 48);
+      if(e.peak >= 4 && !DRILL) return inH <= (cfg.severeHorizonHours ?? 96);
+      return e.peak >= LEVEL && inH <= HORIZON;
     });
 
     console.log("· " + place.n + " @" + Math.round(elevation) + "m — " + events.length +
@@ -161,8 +174,8 @@ async function run(){
       const id = sig(place, e);
       alive.add(id);
       if(seen.has(id)){ console.log("  already announced: " + id); continue; }
-      const title = e.icon + " " + LEVELS[e.peak].n + " " + e.kind + " — " + place.n + ", " +
-                    dayName(e.start) + " " + hh(e.start);
+      const title = (DRILL ? "[test] " : "") + e.icon + " " + LEVELS[e.peak].n + " " + e.kind +
+                    " — " + place.n + ", " + dayName(e.start) + " " + hh(e.start);
       const body = issueBody(place, elevation, e, a, nowSite, d);
       if(DRY){ console.log("\n--- WOULD OPEN ISSUE ---\n" + title + "\n" + body + "\n"); }
       else { await gh("POST", "/issues", { title, body, labels: [LABEL] }); }
@@ -182,7 +195,8 @@ async function run(){
     }
     console.log("closed #" + i.number);
   }
-  console.log(DRY ? "\n(dry run — no issues were created)" : "\ndone: " + opened + " new alert(s)");
+  console.log(DRY ? "\n(dry run — no issues were created)"
+                  : "\ndone: " + opened + " new alert(s)" + (DRILL ? " [test run: level " + LEVEL + ", " + HORIZON + " h]" : ""));
 }
 
 run().catch(e => { console.error("AGENT FAILED:", e.message); process.exit(1); });

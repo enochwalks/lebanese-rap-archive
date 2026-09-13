@@ -6,6 +6,15 @@ on:
   schedule:
     - cron: "0 */3 * * *"     # every 3 hours, UTC
   workflow_dispatch:           # ...and whenever you tap "Run workflow"
+    inputs:
+      alert_level:
+        description: "TEST: alert from this level up (1 = anything at all, 4 = severe). Leave empty for normal."
+        required: false
+        default: ""
+      horizon_hours:
+        description: "TEST: look this many hours ahead (e.g. 240 = ten days). Leave empty for normal."
+        required: false
+        default: ""
 
 permissions:
   issues: write                # the only permission it needs
@@ -22,4 +31,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          ALERT_LEVEL: ${{ github.event.inputs.alert_level }}
+          HORIZON_HOURS: ${{ github.event.inputs.horizon_hours }}
         run: node weather/agent/watch.mjs
