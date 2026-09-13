@@ -45,3 +45,7 @@ fix_uploader.py
 reset.py
 reset_song.py
 video_builder_BACKUP.py
+
+# Editing engine artifacts
+.media_cache.json
+*.edl

@@ -1,0 +1,3 @@
+# Test tooling for the editing engine. The engine itself needs no third-party
+# packages -- only the standard library, plus ffmpeg/ffprobe on PATH.
+pytest>=8.0

@@ -1,0 +1,11 @@
+# Optional capabilities. The engine renders without any of these — it needs
+# only ffmpeg/ffprobe and the standard library.
+
+# Beat detection. Without it, cuts fall back to fixed intervals and the edit
+# is on a metronome rather than on the music.
+librosa>=1.0
+
+# Content vision: lets the editor see what the footage IS (a moon, a shop, a
+# fight) and direct the edit accordingly. Without it the engine still measures
+# motion, exposure and music energy, and directs from those.
+anthropic>=0.40
