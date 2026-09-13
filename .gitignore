@@ -26,6 +26,8 @@ token_*.pickle
 
 # Old conversation dumps / saved web pages
 *.html
+# ...but the Storm Watch app is source, not a saved page:
+!weather/index.html
 *_files/
 Content pipeline*
 
