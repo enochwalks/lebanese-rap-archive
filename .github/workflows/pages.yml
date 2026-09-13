@@ -4,13 +4,17 @@ name: Publish site
 # Runs itself on every push that touches weather/, so the phone always opens
 # the newest version — nothing to download, ever again.
 
+# Manual-only until Pages is switched on by hand: GitHub refuses to let the
+# built-in token create a Pages site ("Resource not accessible by integration"),
+# so an automatic trigger would just fail on every push. Once Settings -> Pages
+# -> Source is set to "GitHub Actions", the push trigger below can come back.
 on:
-  push:
-    branches: [master]
-    paths:
-      - "weather/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
+#  push:
+#    branches: [master]
+#    paths:
+#      - "weather/**"
+#      - ".github/workflows/pages.yml"
 
 permissions:
   contents: read
