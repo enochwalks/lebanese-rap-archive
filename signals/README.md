@@ -46,7 +46,47 @@ channels ──► parse ──► dedupe ──► consensus ──► score �
    that are wrong lose it, automatically. Without this loop "trust" is just a number
    you made up.
 
-## Setup (about 10 minutes)
+## Setup on Windows (about 10 minutes)
+
+Open PowerShell and run these **one block at a time**, not all pasted together.
+
+```powershell
+# 1. Install Python and Git (skip either if you already have it),
+#    then CLOSE PowerShell and open it again so PATH updates.
+winget install -e --id Python.Python.3.11
+winget install -e --id Git.Git
+```
+
+```powershell
+# 2. Get the code into your Documents folder (not system32).
+cd $HOME\Documents
+git clone -b claude/nifty-pasteur-rcppo9 https://github.com/enochwalks/lebanese-rap-archive.git
+cd lebanese-rap-archive\signals
+```
+
+```powershell
+# 3. One script does the rest: virtual environment, dependencies, config files.
+.\setup.ps1
+```
+
+If PowerShell refuses to run the script ("running scripts is disabled"), allow it
+for this window only:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Then, one at a time:
+
+```powershell
+.\run.ps1 login       # one-time Telegram login
+.\run.ps1 channels    # lists your channels + their ids -> paste into config.yaml
+.\run.ps1 watch       # starts filtering
+```
+
+`run.ps1` works for every command: `stats`, `recent`, `poll`, `test`.
+
+## Setup on macOS / Linux
 
 ```bash
 cd signals

@@ -51,3 +51,4 @@ signals/.env
 signals/config.yaml
 signals/*.db
 signals/*.session
+signals/.venv/
