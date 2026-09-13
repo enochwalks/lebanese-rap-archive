@@ -10,5 +10,7 @@
   ],
   "alertLevel": 4,
   "horizonHours": 48,
-  "severeHorizonHours": 96
+  "severeHorizonHours": 96,
+  "notifyUser": "enochwalks",
+  "ntfyTopic": ""
 }

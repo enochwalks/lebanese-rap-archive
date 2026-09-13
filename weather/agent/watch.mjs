@@ -79,6 +79,7 @@ const DRILL   = !!(process.env.ALERT_LEVEL || process.env.HORIZON_HOURS);
 
 const TOKEN = process.env.GITHUB_TOKEN;
 const REPO  = process.env.GITHUB_REPOSITORY;
+const OWNER = (cfg.notifyUser || (REPO || "/").split("/")[0] || "").trim();
 const LABEL = "storm-watch";
 const DRY   = !TOKEN || !REPO || process.env.DRY_RUN === "1";
 
@@ -103,6 +104,7 @@ function issueBody(place, elevation, e, a, now, d){
   const lines = [];
   lines.push("## " + e.icon + " " + e.kind.toUpperCase() + " — " + L.n.toUpperCase());
   lines.push("");
+  if(OWNER){ lines.push("@" + OWNER); lines.push(""); }
   lines.push("**" + place.n + "**, " + Math.round(elevation) + " m · `" + place.lat + ", " + place.lon + "`");
   lines.push("");
   lines.push("| | |");
@@ -145,6 +147,34 @@ function issueBody(place, elevation, e, a, now, d){
   return lines.join("\n");
 }
 
+/* Optional: ntfy.sh push straight to the phone. Set "ntfyTopic" in config.json
+   and subscribe to the same topic in the ntfy app. No account, no key. The
+   topic name is the only secret, so make it long and unguessable. */
+async function ntfy(place, e, title){
+  const topic = (cfg.ntfyTopic || "").trim();
+  if(!topic) return;
+  const body = [
+    e.kind.toUpperCase() + " — " + place.n,
+    "Starts " + dayName(e.start) + " " + hh(e.start) + " (" + relTime(e.start, Date.now()) + "), " + e.durH + " h",
+    (e.rain >= 0.5 ? e.rain + " mm rain. " : "") + (e.snow >= 0.3 ? e.snow + " cm snow. " : "") +
+      "Gusts " + e.maxGust + " km/h.",
+    e.tagList.length ? e.tagList.join(" · ") : ""
+  ].filter(Boolean).join("\n");
+  try{
+    const r = await fetch("https://ntfy.sh/" + encodeURIComponent(topic), {
+      method: "POST",
+      headers: {
+        "Title": title.replace(/[^\x20-\x7E]/g, "").trim() || "Storm alert",
+        "Priority": e.peak >= 4 ? "urgent" : "high",
+        "Tags": e.peak >= 4 ? "rotating_light" : "warning",
+        "Click": "https://enochwalks.github.io/lebanese-rap-archive/weather/"
+      },
+      body
+    });
+    console.log("  ntfy: " + (r.ok ? "sent" : "failed " + r.status));
+  }catch(err){ console.log("  ntfy failed: " + err.message); }
+}
+
 /* ---------- main ---------- */
 async function run(){
   const existing = await openIssues();
@@ -178,7 +208,18 @@ async function run(){
                     " — " + place.n + ", " + dayName(e.start) + " " + hh(e.start);
       const body = issueBody(place, elevation, e, a, nowSite, d);
       if(DRY){ console.log("\n--- WOULD OPEN ISSUE ---\n" + title + "\n" + body + "\n"); }
-      else { await gh("POST", "/issues", { title, body, labels: [LABEL] }); }
+      else {
+        const issue = { title, body, labels: [LABEL] };
+        if(OWNER) issue.assignees = [OWNER];
+        try{ await gh("POST", "/issues", issue); }
+        catch(err){                                  // assignee rejected? still send the alert
+          if(!OWNER) throw err;
+          console.log("  (could not assign to " + OWNER + ": " + err.message.slice(0,80) + ")");
+          delete issue.assignees;
+          await gh("POST", "/issues", issue);
+        }
+        await ntfy(place, e, title);
+      }
       opened++;
     }
   }
