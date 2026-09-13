@@ -83,15 +83,23 @@ def cmd_stats(args):
         if not rows:
             print("No signals recorded yet.")
             return
-        print(f"{'channel':<28}{'seen':>6}{'sent':>6}{'W':>5}{'L':>5}{'avg':>7}{'trust':>8}")
+        from . import promo
+        from .score import channel_trust
+        print(f"{'channel':<26}{'seen':>6}{'sent':>6}{'W':>5}{'L':>5}{'avg':>7}{'promo':>7}{'trust':>7}")
         for row in rows:
-            from .score import channel_trust
             wins, losses = int(row["wins"] or 0), int(row["losses"] or 0)
             weight = config.source_map(cfg).get(row["channel_id"], {}).get("weight", 1.0)
-            trust = channel_trust(wins, losses, cfg["scoring"]["trust_prior_trades"], weight)
-            print(f"{(row['channel_name'] or '?')[:27]:<28}{row['seen']:>6}"
+            promo_n = db.get_counter(conn, f"promo:{row['channel_id']}")
+            msgs_n = db.get_counter(conn, f"msgs:{row['channel_id']}")
+            multiplier = promo.penalty(promo_n, msgs_n)
+            trust = channel_trust(wins, losses, cfg["scoring"]["trust_prior_trades"],
+                                  weight * multiplier)
+            share = f"{(100.0 * promo_n / msgs_n):.0f}%" if msgs_n else "-"
+            print(f"{(row['channel_name'] or '?')[:25]:<26}{row['seen']:>6}"
                   f"{int(row['accepted'] or 0):>6}{wins:>5}{losses:>5}"
-                  f"{row['avg_score'] or 0:>7}{trust:>8.2f}")
+                  f"{row['avg_score'] or 0:>7}{share:>7}{trust:>7.2f}")
+        print("\npromo = share of that channel's posts that are deposit/recruitment pitches.")
+        print("Anything above ~30% is a funnel with signals attached, not a signal channel.")
 
         pending = conn.execute(
             "SELECT COUNT(*) AS n FROM signals WHERE outcome IS NULL AND asset_class = 'crypto'"

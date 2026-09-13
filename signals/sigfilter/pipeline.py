@@ -3,7 +3,7 @@
 import hashlib
 import time
 
-from . import consensus, db, parse, score
+from . import consensus, db, parse, promo, score
 from .config import source_map
 
 
@@ -24,6 +24,12 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
     if db.already_seen(conn, channel_id, msg_id):
         return {"status": "duplicate_message"}
 
+    # Count the whole feed, not just the tradeable part: the promo ratio is what
+    # tells you whether this is a signal channel or a funnel.
+    db.bump_counter(conn, f"msgs:{channel_id}")
+    if promo.is_promo(text):
+        db.bump_counter(conn, f"promo:{channel_id}")
+
     sig = parse.parse(text)
     if not sig:
         return {"status": "not_a_signal"}
@@ -36,10 +42,13 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
     )
 
     wins, losses = db.channel_record(conn, channel_id)
+    promo_count = db.get_counter(conn, f"promo:{channel_id}")
+    msg_count = db.get_counter(conn, f"msgs:{channel_id}")
+    promo_penalty = promo.penalty(promo_count, msg_count)
     trust = score.channel_trust(
         wins, losses,
         prior_trades=cfg["scoring"]["trust_prior_trades"],
-        weight=channel["weight"],
+        weight=channel["weight"] * promo_penalty,
     )
 
     total, breakdown = score.score_signal(
@@ -66,4 +75,5 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
         "channel": channel["name"],
         "trust": round(trust, 3),
         "record": (wins, losses),
+        "promo": (promo_count, msg_count, round(promo_penalty, 2)),
     }

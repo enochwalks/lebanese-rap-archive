@@ -68,6 +68,22 @@ def set_state(conn, key, value):
     )
 
 
+def bump_counter(conn, key, by=1):
+    conn.execute(
+        "INSERT INTO state(key, value) VALUES(?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = CAST(CAST(value AS INTEGER) + ? AS TEXT)",
+        (key, str(by), by),
+    )
+
+
+def get_counter(conn, key):
+    row = conn.execute("SELECT value FROM state WHERE key = ?", (key,)).fetchone()
+    try:
+        return int(row["value"]) if row else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 def already_seen(conn, channel_id, msg_id):
     row = conn.execute(
         "SELECT 1 FROM signals WHERE channel_id = ? AND msg_id = ?", (channel_id, msg_id)

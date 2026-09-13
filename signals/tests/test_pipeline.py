@@ -88,3 +88,53 @@ class TestPipeline(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPromoPenalty(unittest.TestCase):
+    """A channel whose feed is mostly deposit pitches loses trust for its signals."""
+
+    def setUp(self):
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
+        self.now = int(time.time())
+
+    def test_real_funnel_text_is_flagged(self):
+        from sigfilter import promo
+        for text in (
+            "If you know you have $1000 and above this is your opportunity to "
+            "make it big in our investment plan. #4days plan",
+            "Invest $1000 get $11,000",
+            "Slot is Limited CLICK ON THE PINNED MESSAGE TO CONTACT ADMIN",
+            "BOOK YOUR SLOT NOW FOR ACCOUNT MANAGEMENT",
+            "NB: Our commission is 20% and Taken from profits",
+        ):
+            self.assertTrue(promo.is_promo(text), text)
+
+    def test_real_signals_are_never_flagged(self):
+        from sigfilter import promo
+        for text in (CLEAN, "XAUUSD BUY 2340 TP 2365 SL 2332",
+                     "SOL LONG entry 140 TP1 145 SL 134"):
+            self.assertFalse(promo.is_promo(text), text)
+
+    def test_penalty_needs_a_sample_before_biting(self):
+        from sigfilter import promo
+        self.assertEqual(promo.penalty(3, 5), 1.0)      # day one proves nothing
+        self.assertLess(promo.penalty(15, 40), 0.7)     # a third of the feed does
+
+    def test_funnel_channel_scores_lower_than_clean_one(self):
+        with db.connect(self.tmp) as conn:
+            for i in range(30):                          # Casino spams the funnel
+                pipeline.process(conn, CFG, channel_id=-400, msg_id=1000 + i,
+                                 text="Invest $1000 get $11,000, contact admin, slot is limited",
+                                 ts=self.now - 600, now=self.now)
+            for i in range(30):                          # Alpha posts ordinary chat
+                pipeline.process(conn, CFG, channel_id=-100, msg_id=2000 + i,
+                                 text="good morning team, watching the open",
+                                 ts=self.now - 600, now=self.now)
+            funnel = pipeline.process(conn, CFG, channel_id=-400, msg_id=9001,
+                                      text=CLEAN, ts=self.now, now=self.now)
+            clean = pipeline.process(conn, CFG, channel_id=-100, msg_id=9002,
+                                     text="SOL LONG entry 140 TP1 152 SL 134",
+                                     ts=self.now, now=self.now)
+        self.assertLess(funnel["promo"][2], 1.0)
+        self.assertEqual(clean["promo"][2], 1.0)
+        self.assertLess(funnel["trust"], clean["trust"])
