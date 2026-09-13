@@ -9,8 +9,13 @@ import time
 from . import config, db, deliver, pipeline
 
 
-def cmd_login(_args):
-    """One-time interactive login; prints a session string for headless runs."""
+def cmd_login(args):
+    """One-time interactive login.
+
+    The session string is a bearer credential for the whole Telegram account, so
+    it is never printed unless explicitly asked for: terminals get screenshotted,
+    pasted into chats and scrolled past by people standing behind you.
+    """
     from telethon.sessions import StringSession
 
     from . import listener
@@ -20,10 +25,13 @@ def cmd_login(_args):
         me = client.loop.run_until_complete(client.get_me())
         name = getattr(me, "first_name", None) or getattr(me, "username", "?")
         print(f"\nLogged in as {name}. The session is saved locally, so you will")
-        print("not be asked for the code again on this machine.\n")
-        print("Only if you plan to run this on GitHub Actions, copy the line below")
-        print("into .env as TG_SESSION (it is full access to your account, so use")
-        print("a separate Telegram account for that):\n")
+        print("not be asked for the code again on this machine.")
+        if not getattr(args, "show_session", False):
+            print("\nRunning this on GitHub Actions instead? Re-run with --show-session")
+            print("to print the session string. Do not do that on a shared screen.")
+            return
+        print("\nSECRET — anyone holding this line can act as you on Telegram.")
+        print("Put it in .env as TG_SESSION and never paste it anywhere else:\n")
         print(StringSession.save(client.session))
 
 
@@ -136,7 +144,11 @@ def main(argv=None):
     parser.add_argument("--config", help="path to config.yaml")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("login", help="one-time Telegram login, prints a session string")
+    login_parser = sub.add_parser("login", help="one-time Telegram login")
+    login_parser.add_argument(
+        "--show-session", action="store_true",
+        help="also print the session string, needed only for headless/CI runs",
+    )
     sub.add_parser("channels", help="list your chats and their ids")
     sub.add_parser("watch", help="run forever, forward signals as they arrive")
 
