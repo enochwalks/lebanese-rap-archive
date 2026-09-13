@@ -1,0 +1,1259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Storm Watch">
+<meta name="description" content="Live storm, snow and wind alerts for Lebanon's mountains.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9B%88%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<title>Lebanon Storm Watch · مرصد العواصف</title>
+<style>
+:root{
+  --bg:#0b1220; --bg2:#0f1830; --card:#131e38; --card2:#18243f;
+  --line:#24314f; --line2:#2f3f63;
+  --tx:#e8eefc; --tx2:#9fb0d0; --tx3:#6f81a5;
+  --calm:#3ba55d; --watch:#3b82f6; --adv:#eab308; --warn:#f97316; --sev:#ef4444; --ext:#a855f7;
+  --snow:#7dd3fc; --ice:#67e8f9;
+  --r:16px; --r2:12px;
+  --shadow:0 10px 30px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1100px 520px at 78% -12%, #1b2a52 0%, transparent 62%),
+    radial-gradient(760px 420px at 8% 4%, #162447 0%, transparent 58%),
+    var(--bg);
+  color:var(--tx);
+  font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+.wrap{max-width:1080px;margin:0 auto;padding:16px 16px 64px}
+@media(min-width:720px){.wrap{padding:24px 24px 80px}}
+
+/* ---------- header ---------- */
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.brand .mk{font-size:26px;line-height:1}
+.brand h1{font-size:17px;margin:0;font-weight:700;letter-spacing:-.2px;white-space:nowrap}
+.brand small{display:block;color:var(--tx3);font-weight:500;font-size:11.5px;letter-spacing:.4px}
+.ctrls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+select,button,input{font:inherit;color:var(--tx)}
+select,.btn,input[type=search]{
+  background:var(--card);border:1px solid var(--line2);border-radius:10px;
+  padding:9px 12px;cursor:pointer;outline:none;
+}
+select{max-width:60vw}
+input[type=search]{cursor:text;min-width:190px}
+.btn{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover,select:hover{border-color:#4a5f8f;background:var(--card2)}
+.btn.busy{opacity:.55;pointer-events:none}
+
+/* ---------- generic card ---------- */
+.card{background:linear-gradient(180deg,var(--card) 0%,var(--card2) 100%);border:1px solid var(--line);
+      border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+.card h2{margin:0 0 12px;font-size:12px;letter-spacing:1.3px;text-transform:uppercase;color:var(--tx3);font-weight:700}
+.grid{display:grid;gap:14px}
+@media(min-width:860px){.cols2{grid-template-columns:1fr 1fr}}
+
+/* ---------- hero alert ---------- */
+.hero{position:relative;overflow:hidden;border-radius:var(--r);border:1px solid var(--line2);
+      padding:20px;margin-bottom:14px;box-shadow:var(--shadow);background:var(--card)}
+.hero.lv0{background:linear-gradient(135deg,#12351f,#0f2438)}
+.hero.lv1{background:linear-gradient(135deg,#12294f,#122b46)}
+.hero.lv2{background:linear-gradient(135deg,#4a3b06,#25281f)}
+.hero.lv3{background:linear-gradient(135deg,#5e2f06,#2a2016)}
+.hero.lv4{background:linear-gradient(135deg,#6b1414,#2b1520)}
+.hero.lv5{background:linear-gradient(135deg,#4a1063,#2a1030)}
+.hero .tagline{font-size:11.5px;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.72);font-weight:700}
+.hero h3{margin:8px 0 4px;font-size:26px;line-height:1.15;letter-spacing:-.5px}
+@media(min-width:720px){.hero h3{font-size:32px}}
+.hero .sub{color:rgba(255,255,255,.85);font-size:14.5px}
+.hero .cd{margin-top:14px;display:flex;flex-wrap:wrap;gap:8px}
+.pill{background:rgba(0,0,0,.32);border:1px solid rgba(255,255,255,.16);border-radius:999px;
+      padding:6px 12px;font-size:13px;font-weight:600;white-space:nowrap}
+.hero .icon{position:absolute;right:-6px;top:-10px;font-size:112px;opacity:.13;pointer-events:none}
+
+/* ---------- advisor ---------- */
+.adv{border:1px solid var(--line2);border-radius:var(--r);padding:18px;margin-bottom:14px;
+     background:linear-gradient(180deg,#16223d,#131d33);box-shadow:var(--shadow)}
+.adv h2{margin:0 0 4px;font-size:12px;letter-spacing:1.3px;text-transform:uppercase;color:var(--tx3);font-weight:700}
+.adv .say{font-size:16px;line-height:1.6;margin:10px 0 4px}
+.adv .say b{color:#fff}
+.adv .why{color:var(--tx2);font-size:13.5px;line-height:1.6}
+.acts{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+.acts li{display:flex;gap:10px;align-items:flex-start;background:rgba(255,255,255,.05);
+         border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.acts li.p3{border-color:rgba(239,68,68,.5);background:rgba(239,68,68,.09)}
+.acts li.p2{border-color:rgba(249,115,22,.45)}
+.acts .ai{font-size:17px;line-height:1.35}
+.acts .at{font-size:13.5px;line-height:1.5}
+.acts .aw{display:block;color:var(--tx3);font-size:11.5px;margin-top:2px;font-weight:600;text-transform:uppercase;letter-spacing:.7px}
+.advbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.advbtns .btn{background:rgba(255,255,255,.07)}
+.ok{color:var(--calm);font-weight:700}
+
+/* ---------- now ---------- */
+.now{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.now .tmp{font-size:54px;font-weight:750;letter-spacing:-2px;line-height:1}
+.now .meta{flex:1;min-width:180px}
+.now .cond{font-size:16px;font-weight:650}
+.now .feels{color:var(--tx2);font-size:13px}
+.now .big{font-size:38px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:10px;margin-top:14px}
+.stat{background:rgba(255,255,255,.045);border:1px solid var(--line);border-radius:var(--r2);padding:10px}
+.stat .k{font-size:10.5px;letter-spacing:.9px;text-transform:uppercase;color:var(--tx3);font-weight:700}
+.stat .v{font-size:17px;font-weight:700;margin-top:3px}
+.stat .n{font-size:11.5px;color:var(--tx2)}
+
+/* ---------- mountain ---------- */
+.mtn .row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-bottom:1px dashed var(--line)}
+.mtn .row:last-child{border-bottom:0}
+.mtn .lbl{color:var(--tx2);font-size:13.5px}
+.mtn .val{font-weight:700;text-align:right}
+.snowbar{position:relative;height:74px;margin:6px 0 12px;border-radius:var(--r2);overflow:hidden;
+         background:linear-gradient(180deg,#1c2b4d,#0f1830);border:1px solid var(--line)}
+.snowbar .zone{position:absolute;left:0;right:0;background:rgba(125,211,252,.18);border-bottom:2px dashed var(--snow)}
+.snowbar .me{position:absolute;left:0;right:0;border-top:2px solid #f59e0b}
+.snowbar .tag{position:absolute;font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;background:rgba(0,0,0,.55)}
+
+/* ---------- timeline ---------- */
+.scroller{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
+.hours{display:flex;gap:7px;min-width:min-content}
+.hr{flex:0 0 58px;text-align:center;background:rgba(255,255,255,.04);border:1px solid var(--line);
+    border-radius:10px;padding:8px 4px;position:relative}
+.hr.lv2{border-color:rgba(234,179,8,.55)} .hr.lv3{border-color:rgba(249,115,22,.6)}
+.hr.lv4{border-color:rgba(239,68,68,.65);background:rgba(239,68,68,.1)}
+.hr.lv5{border-color:rgba(168,85,247,.7);background:rgba(168,85,247,.12)}
+.hr .t{font-size:10.5px;color:var(--tx3);font-weight:700}
+.hr .i{font-size:19px;margin:3px 0}
+.hr .d{font-size:12.5px;font-weight:700}
+.hr .g{font-size:10px;color:var(--tx2);margin-top:2px}
+.hr .bar{height:3px;border-radius:2px;margin-top:5px;background:#2a3a5e}
+.hr .bar i{display:block;height:100%;border-radius:2px;background:var(--watch)}
+.daymark{flex:0 0 auto;writing-mode:vertical-rl;font-size:10px;letter-spacing:1px;color:var(--tx3);
+         padding:4px 2px;font-weight:700;text-transform:uppercase}
+
+/* ---------- storm list ---------- */
+.ev{display:flex;gap:12px;padding:12px;border:1px solid var(--line);border-radius:var(--r2);
+    background:rgba(255,255,255,.035);margin-bottom:10px}
+.ev:last-child{margin-bottom:0}
+.ev .ic{font-size:26px;line-height:1.1}
+.ev .body{flex:1;min-width:0}
+.ev .ttl{font-weight:750;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ev .when{color:var(--tx2);font-size:13px;margin-top:2px}
+.ev .facts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:11.5px;font-weight:650;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.07);
+      border:1px solid var(--line2);color:var(--tx2)}
+.badge{font-size:10.5px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;padding:3px 8px;border-radius:6px;color:#0b1220}
+.b1{background:var(--watch);color:#fff} .b2{background:var(--adv)} .b3{background:var(--warn)}
+.b4{background:var(--sev);color:#fff} .b5{background:var(--ext);color:#fff}
+
+/* ---------- daily ---------- */
+.days{display:grid;gap:8px}
+.day{display:grid;grid-template-columns:64px 34px 1fr auto;gap:10px;align-items:center;
+     padding:9px 10px;border-radius:10px;background:rgba(255,255,255,.035);border:1px solid var(--line)}
+.day .dn{font-weight:700;font-size:13px}
+.day .dn small{display:block;color:var(--tx3);font-weight:500;font-size:11px}
+.day .di{font-size:20px;text-align:center}
+.day .dd{font-size:12px;color:var(--tx2);min-width:0}
+.day .dt{text-align:right;font-weight:700;font-size:13.5px;white-space:nowrap}
+.day .dt span{color:var(--tx3);font-weight:600}
+
+/* ---------- radar ---------- */
+#map{position:relative;height:340px;border-radius:var(--r2);overflow:hidden;border:1px solid var(--line);background:#0d1526}
+.radarbar{display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap}
+.radarbar input[type=range]{flex:1;min-width:140px;accent-color:#60a5fa}
+.leaflet-container{background:#0d1526 !important}
+
+/* ---------- regions ---------- */
+.regions{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:9px}
+.rg{padding:10px;border-radius:10px;border:1px solid var(--line);background:rgba(255,255,255,.035)}
+.rg .rn{font-weight:700;font-size:13.5px}
+.rg .rn small{color:var(--tx3);font-weight:500}
+.rg .rs{font-size:12px;color:var(--tx2);margin-top:4px}
+.rg .rb{height:4px;border-radius:2px;margin-top:7px;background:#2a3a5e;overflow:hidden}
+.rg .rb i{display:block;height:100%}
+
+.muted{color:var(--tx3);font-size:12px}
+.err{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.45);border-radius:var(--r2);padding:12px;font-size:13.5px}
+footer{margin-top:22px;color:var(--tx3);font-size:11.5px;line-height:1.7;text-align:center}
+footer a{color:var(--tx2)}
+.skel{animation:p 1.3s ease-in-out infinite;background:linear-gradient(90deg,#182444,#1f2d52,#182444);
+      background-size:200% 100%;border-radius:8px;color:transparent}
+@keyframes p{0%{background-position:0% 0}100%{background-position:-200% 0}}
+.hide{display:none !important}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="brand">
+    <div class="mk">⛰️</div>
+    <div>
+      <h1>Lebanon Storm Watch</h1>
+      <small>مرصد العواصف · جبل لبنان</small>
+    </div>
+  </div>
+  <div class="ctrls">
+    <select id="loc" aria-label="Location"></select>
+    <button class="btn" id="gps" title="Use my GPS position">📍 My spot</button>
+    <button class="btn" id="reload" title="Refresh now">⟳</button>
+  </div>
+</header>
+
+<div id="searchRow" class="ctrls" style="margin:-4px 0 14px">
+  <input type="search" id="q" placeholder="Search any village… (e.g. Hasroun)" autocomplete="off">
+  <button class="btn" id="qgo">Find</button>
+  <span class="muted" id="qmsg"></span>
+</div>
+
+<div id="banner"></div>
+
+<div id="hero" class="hero lv0">
+  <div class="tagline">Storm outlook</div>
+  <h3 class="skel">Loading forecast…</h3>
+  <div class="sub skel">Contacting weather models</div>
+</div>
+
+<div class="adv" id="advisor">
+  <h2>What this means for you · شو يعني هيدا</h2>
+  <div class="say skel">Reading the forecast…</div>
+</div>
+
+<div class="grid cols2" style="margin-bottom:14px">
+  <div class="card" id="nowCard">
+    <h2>Right now <span id="nowPlace"></span></h2>
+    <div class="now" id="nowBody"><div class="tmp skel">--°</div></div>
+    <div class="stats" id="nowStats"></div>
+  </div>
+
+  <div class="card mtn" id="mtnCard">
+    <h2>Mountain conditions</h2>
+    <div class="snowbar" id="snowbar"></div>
+    <div id="mtnRows"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>Next 48 hours</h2>
+  <div class="scroller"><div class="hours" id="hours"></div></div>
+  <div class="muted" style="margin-top:8px">Bar = gust strength · colour border = storm threat level</div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>Incoming storms <span class="muted" id="evCount"></span></h2>
+  <div id="events"></div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>10-day outlook</h2>
+  <div class="days" id="days"></div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>Live rain radar</h2>
+  <div id="map"></div>
+  <div class="radarbar">
+    <button class="btn" id="play">▶︎ Play</button>
+    <input type="range" id="frame" min="0" max="0" value="0">
+    <span class="muted" id="frameLbl">—</span>
+  </div>
+  <div class="muted" style="margin-top:6px">Past 2 h + 30 min nowcast (RainViewer). Blue-green = rain, purple/white = intense cell or hail.</div>
+</div>
+
+<div class="card">
+  <h2>Across Lebanon · next 7 days</h2>
+  <div class="regions" id="regions"></div>
+</div>
+
+<footer>
+  Forecast: <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> (ICON / ECMWF / GFS blend) ·
+  Radar: <a href="https://rainviewer.com" target="_blank" rel="noopener">RainViewer</a> · Map: OpenStreetMap<br>
+  Storm levels are computed by this app from model output — they are not official warnings.
+  For life-threatening weather follow Lebanon's Civil Defence (125) and the Beirut Met Service.<br>
+  <span id="stamp"></span>
+</footer>
+
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
+<script>
+"use strict";
+
+/* ============================================================
+   1. PLACES — Lebanese mountain villages, peaks and towns
+   elevation in metres (used to downscale the model to your ridge)
+   ============================================================ */
+const PLACES = [
+ {g:"North · Bcharre & Cedars", list:[
+  {n:"Bcharre", a:"بشري", lat:34.2506, lon:36.0108, el:1400},
+  {n:"The Cedars (Al Arz)", a:"الأرز", lat:34.2436, lon:36.0492, el:2000},
+  {n:"Qornet es Sawda (summit)", a:"قرنة السودا", lat:34.2975, lon:36.0722, el:3088},
+  {n:"Bqaa Kafra", a:"بقاعكفرا", lat:34.2333, lon:36.0167, el:1620},
+  {n:"Hasroun", a:"حصرون", lat:34.2114, lon:35.9986, el:1400},
+  {n:"Hadath el Jebbeh", a:"حدث الجبة", lat:34.2000, lon:35.9667, el:1450},
+  {n:"Ehden", a:"إهدن", lat:34.2900, lon:35.9700, el:1450},
+  {n:"Tannourine", a:"تنورين", lat:34.2069, lon:35.9089, el:1400},
+  {n:"Douma", a:"دوما", lat:34.2153, lon:35.8467, el:1050},
+ ]},
+ {g:"Keserwan · Faraya & Laqlouq", list:[
+  {n:"Faraya", a:"فاريا", lat:34.0139, lon:35.8000, el:1500},
+  {n:"Mzaar ski resort", a:"المزار", lat:33.9928, lon:35.8503, el:2100},
+  {n:"Faqra", a:"فقرا", lat:34.0018, lon:35.8114, el:1650},
+  {n:"Kfardebian", a:"كفردبيان", lat:33.9889, lon:35.7500, el:1300},
+  {n:"Laqlouq", a:"اللقلوق", lat:34.1247, lon:35.8586, el:1750},
+  {n:"Afqa", a:"أفقا", lat:34.0692, lon:35.8683, el:1200},
+ ]},
+ {g:"Metn · Sannine", list:[
+  {n:"Sannine summit", a:"صنين", lat:33.9333, lon:35.8333, el:2628},
+  {n:"Zaarour", a:"الزعرور", lat:33.8964, lon:35.8225, el:1750},
+  {n:"Baskinta", a:"بسكنتا", lat:33.9333, lon:35.7833, el:1250},
+  {n:"Dhour El Choueir", a:"ضهور الشوير", lat:33.8833, lon:35.7000, el:1100},
+  {n:"Broummana", a:"برمانا", lat:33.8833, lon:35.6167, el:760},
+  {n:"Beit Mery", a:"بيت مري", lat:33.8531, lon:35.6011, el:800},
+  {n:"Bikfaya", a:"بكفيا", lat:33.9167, lon:35.6833, el:950},
+ ]},
+ {g:"Aley & Chouf", list:[
+  {n:"Aley", a:"عاليه", lat:33.8106, lon:35.6000, el:850},
+  {n:"Bhamdoun", a:"بحمدون", lat:33.7947, lon:35.6600, el:1150},
+  {n:"Sofar", a:"صوفر", lat:33.7833, lon:35.6833, el:1300},
+  {n:"Dahr el Baidar", a:"ضهر البيدر", lat:33.8078, lon:35.7583, el:1540},
+  {n:"Deir el Qamar", a:"دير القمر", lat:33.6969, lon:35.5583, el:850},
+  {n:"Barouk cedars", a:"أرز الباروك", lat:33.6947, lon:35.6906, el:1600},
+  {n:"Maaser el Chouf", a:"معاصر الشوف", lat:33.6500, lon:35.6833, el:1250},
+  {n:"Niha (Chouf)", a:"نيحا", lat:33.6653, lon:35.6236, el:1200},
+ ]},
+ {g:"Bekaa & Anti-Lebanon", list:[
+  {n:"Zahle", a:"زحلة", lat:33.8463, lon:35.9019, el:1000},
+  {n:"Baalbek", a:"بعلبك", lat:34.0059, lon:36.2181, el:1170},
+  {n:"Deir el Ahmar", a:"دير الأحمر", lat:34.1500, lon:36.1167, el:1150},
+  {n:"Hermel", a:"الهرمل", lat:34.3900, lon:36.3833, el:700},
+  {n:"Rachaya", a:"راشيا", lat:33.5019, lon:35.8442, el:1250},
+  {n:"Mount Hermon slopes", a:"جبل الشيخ", lat:33.4167, lon:35.8572, el:2000},
+ ]},
+ {g:"Akkar & the far north", list:[
+  {n:"Qammoua", a:"القموعة", lat:34.5333, lon:36.2333, el:1600},
+  {n:"Fneidek", a:"فنيدق", lat:34.4667, lon:36.1833, el:1300},
+  {n:"Halba", a:"حلبا", lat:34.5433, lon:36.0800, el:250},
+ ]},
+ {g:"South", list:[
+  {n:"Jezzine", a:"جزين", lat:33.5458, lon:35.5847, el:950},
+  {n:"Marjayoun", a:"مرجعيون", lat:33.3600, lon:35.5917, el:750},
+  {n:"Bint Jbeil", a:"بنت جبيل", lat:33.1214, lon:35.4286, el:700},
+  {n:"Nabatieh", a:"النبطية", lat:33.3789, lon:35.4839, el:500},
+ ]},
+ {g:"Coast", list:[
+  {n:"Beirut", a:"بيروت", lat:33.8938, lon:35.5018, el:30},
+  {n:"Tripoli", a:"طرابلس", lat:34.4367, lon:35.8497, el:20},
+  {n:"Jounieh", a:"جونية", lat:33.9808, lon:35.6178, el:20},
+  {n:"Amchit", a:"عمشيت", lat:34.1533, lon:35.6450, el:60},
+  {n:"Byblos (Jbeil)", a:"جبيل", lat:34.1231, lon:35.6511, el:30},
+  {n:"Saida", a:"صيدا", lat:33.5571, lon:35.3729, el:15},
+  {n:"Tyre (Sour)", a:"صور", lat:33.2705, lon:35.2038, el:10},
+ ]},
+];
+const ALL = PLACES.flatMap(g => g.list);
+
+/* regional scan points for the national strip */
+const REGIONS = [
+ {n:"Akkar highlands", a:"عكار", lat:34.4667, lon:36.1833, el:1300},
+ {n:"Cedars / Bcharre", a:"الأرز", lat:34.2436, lon:36.0492, el:2000},
+ {n:"Tripoli coast", a:"طرابلس", lat:34.4367, lon:35.8497, el:20},
+ {n:"Jbeil / Amchit", a:"جبيل", lat:34.1533, lon:35.6450, el:60},
+ {n:"Faraya / Mzaar", a:"فاريا", lat:33.9928, lon:35.8503, el:2100},
+ {n:"Beirut", a:"بيروت", lat:33.8938, lon:35.5018, el:30},
+ {n:"Zahle / Bekaa", a:"زحلة", lat:33.8463, lon:35.9019, el:1000},
+ {n:"Barouk / Chouf", a:"الشوف", lat:33.6947, lon:35.6906, el:1600},
+ {n:"Hermon / Rachaya", a:"جبل الشيخ", lat:33.4167, lon:35.8572, el:2000},
+ {n:"Jezzine", a:"جزين", lat:33.5458, lon:35.5847, el:950},
+ {n:"South / Bint Jbeil", a:"بنت جبيل", lat:33.1214, lon:35.4286, el:700},
+];
+
+/* ===SHARED START=== */
+/* ============================================================
+   2. WMO weather codes
+   ============================================================ */
+const WMO = {
+ 0:["Clear sky","☀️"], 1:["Mainly clear","🌤️"], 2:["Partly cloudy","⛅"], 3:["Overcast","☁️"],
+ 45:["Fog","🌫️"], 48:["Freezing fog","🌫️❄️"],
+ 51:["Light drizzle","🌦️"], 53:["Drizzle","🌦️"], 55:["Heavy drizzle","🌧️"],
+ 56:["Freezing drizzle","🌧️🧊"], 57:["Heavy freezing drizzle","🌧️🧊"],
+ 61:["Light rain","🌦️"], 63:["Rain","🌧️"], 65:["Heavy rain","🌧️"],
+ 66:["Freezing rain","🧊"], 67:["Heavy freezing rain","🧊"],
+ 71:["Light snow","🌨️"], 73:["Snow","❄️"], 75:["Heavy snow","❄️"], 77:["Snow grains","🌨️"],
+ 80:["Rain showers","🌦️"], 81:["Heavy showers","🌧️"], 82:["Violent showers","⛈️"],
+ 85:["Snow showers","🌨️"], 86:["Heavy snow showers","❄️"],
+ 95:["Thunderstorm","⛈️"], 96:["Thunderstorm + hail","⛈️🧊"], 99:["Severe thunderstorm + hail","⛈️🧊"]
+};
+const wmo = c => WMO[c] || ["Unknown","❓"];
+
+const LEVELS = [
+ {n:"Calm",      cls:"b0", col:"var(--calm)"},
+ {n:"Watch",     cls:"b1", col:"var(--watch)"},
+ {n:"Advisory",  cls:"b2", col:"var(--adv)"},
+ {n:"Warning",   cls:"b3", col:"var(--warn)"},
+ {n:"Severe",    cls:"b4", col:"var(--sev)"},
+ {n:"Extreme",   cls:"b5", col:"var(--ext)"}
+];
+
+/* ============================================================
+   3. small helpers
+   ============================================================ */
+const $ = s => document.querySelector(s);
+const el = (t,c,h) => { const e=document.createElement(t); if(c)e.className=c; if(h!=null)e.innerHTML=h; return e; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const r1 = n => Math.round(n*10)/10;
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+
+/* Open-Meteo returns local times like "2026-09-13T14:00" with no zone.
+   We parse them as if UTC so every calculation happens in the SITE's clock,
+   no matter which timezone the phone is in. */
+const ts = s => Date.parse(s + (s.length === 16 ? ":00Z" : "Z"));
+const DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MONS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const hh = t => String(new Date(t).getUTCHours()).padStart(2,"0") + ":00";
+const dayName = t => DAYS[new Date(t).getUTCDay()];
+const dateShort = t => { const d=new Date(t); return d.getUTCDate()+" "+MONS[d.getUTCMonth()]; };
+function relTime(t, now){
+  const m = Math.round((t-now)/60000);
+  if(m < -60) return Math.round(-m/60)+" h ago";
+  if(m < 0) return "now";
+  if(m < 60) return "in "+m+" min";
+  const h = Math.round(m/60);
+  if(h < 24) return "in "+h+" h";
+  const d = Math.floor(h/24), rh = h%24;
+  return "in "+d+" d"+(rh?" "+rh+" h":"");
+}
+const arrow = deg => ["↓","↙","←","↖","↑","↗","→","↘"][Math.round(((deg%360)/45))%8];
+const compass = deg => ["N","NE","E","SE","S","SW","W","NW"][Math.round(((deg%360)/45))%8];
+
+/* ===SHARED END=== */
+
+/* ===ENGINE START=== (the GitHub agent extracts everything between these
+   two markers and runs the identical scoring — one source of truth)
+   ============================================================
+   4. THE STORM ENGINE
+   Scores every forecast hour 0-5, then groups hours into events.
+   ============================================================ */
+function hourThreat(h, elevation){
+  // h = {code, precip, rain, snow, gust, wind, vis, cape, fl, temp, pop}
+  let score = 0, tags = [], kind = "storm", bump = 0;
+  const add = (s, tag) => { if(s > score){ score = s; } if(tag && !tags.includes(tag)) tags.push(tag); };
+
+  // --- wind ---
+  const g = h.gust || 0;
+  if(g >= 120) add(5,"destructive wind");
+  else if(g >= 100) add(4,"damaging wind");
+  else if(g >= 80) add(3,"severe gusts");
+  else if(g >= 60) add(2,"strong gusts");
+  else if(g >= 45) add(1,"windy");
+
+  // --- rainfall rate (liquid only: Open-Meteo's `precipitation` also counts melted snow) ---
+  const p = (h.snow || 0) > 0.2 ? (h.rain || 0) : (h.precip || 0);
+  if(p >= 20) add(5,"torrential rain");
+  else if(p >= 10) add(4,"flooding rain");
+  else if(p >= 5) add(3,"heavy rain");
+  else if(p >= 2) add(2,"steady rain");
+  else if(p >= 0.5) add(1,"showers");
+
+  // --- thunder / hail ---
+  if(h.code === 99) add(5,"severe thunderstorm + hail");
+  else if(h.code === 96) add(4,"thunderstorm + hail");
+  else if(h.code === 95) add(3,"thunderstorm");
+  else if(h.code === 82) add(3,"violent showers");
+  if((h.cape||0) >= 2000 && p >= 1) { bump = Math.max(bump,1); tags.push("high instability"); }
+
+  // --- snow (cm in that hour) ---
+  const s = h.snow || 0;
+  if(s >= 6) add(5,"blizzard snowfall");
+  else if(s >= 3) add(4,"heavy snow");
+  else if(s >= 1.5) add(3,"snow");
+  else if(s >= 0.4) add(2,"light snow");
+  else if(s > 0) add(1,"snow flurries");
+  if(s >= 1 && g >= 50){ bump = Math.max(bump,1); tags.push("blowing snow / whiteout"); kind="blizzard"; }
+
+  // --- ice: freezing rain codes, or freezing level sitting on your village ---
+  if(h.code === 66 || h.code === 67) add(5,"freezing rain — black ice");
+  else if(h.code === 56 || h.code === 57) add(4,"freezing drizzle — ice");
+  let mixRisk = false;
+  if(elevation != null && h.fl != null && p >= 0.3){
+    const dz = h.fl - elevation;           // snow line above you (m)
+    if(dz > -150 && dz < 350 && h.temp <= 3){ add(3,"ice / rain-snow mix on the roads"); mixRisk = true; }
+  }
+
+  // --- visibility (cloud on the mountain) ---
+  if(h.vis != null){
+    if(h.vis < 200) add(3,"whiteout visibility");
+    else if(h.vis < 800) add(2,"dense fog");
+    else if(h.vis < 2000) add(1,"low cloud");
+  }
+
+  score = clamp(score + bump, 0, 5);
+
+  // dominant kind
+  if(kind !== "blizzard"){
+    if(h.code >= 95) kind = "thunderstorm";
+    else if(s >= 1) kind = "snowstorm";
+    else if(h.code===66||h.code===67||h.code===56||h.code===57 || mixRisk) kind = "ice storm";
+    else if(g >= 70 && p < 2) kind = "windstorm";
+    else if(p >= 5) kind = "rainstorm";
+    else if(h.vis != null && h.vis < 800 && p < 1) kind = "fog";
+    else kind = "unsettled";
+  }
+  return {score, tags, kind};
+}
+
+const KIND_ICON = {
+  "thunderstorm":"⛈️", "snowstorm":"❄️", "blizzard":"🌨️", "ice storm":"🧊",
+  "windstorm":"💨", "rainstorm":"🌧️", "fog":"🌫️", "unsettled":"🌥️", "storm":"🌀"
+};
+
+/* group threatening hours into storm events */
+function buildEvents(hrs, elevation){
+  const scored = hrs.map(h => Object.assign({}, h, hourThreat(h, elevation)));
+  const events = [];
+  let cur = null, gap = 0;
+  for(const h of scored){
+    if(h.score >= 2){
+      if(!cur){ cur = {start:h.t, end:h.t, peak:0, hours:[], kinds:{}, tags:{}}; }
+      cur.end = h.t + 3600000;
+      cur.hours.push(h);
+      cur.peak = Math.max(cur.peak, h.score);
+      cur.kinds[h.kind] = (cur.kinds[h.kind]||0) + h.score;
+      h.tags.forEach(t => { cur.tags[t] = Math.max(cur.tags[t]||0, h.score); });
+      gap = 0;
+    } else if(cur){
+      gap++;
+      if(gap > 3){ events.push(cur); cur = null; gap = 0; }
+    }
+  }
+  if(cur) events.push(cur);
+
+  for(const e of events){
+    e.kind = Object.keys(e.kinds).sort((a,b) => e.kinds[b]-e.kinds[a])[0] || "storm";
+    e.icon = KIND_ICON[e.kind] || "🌀";
+    e.tagList = Object.keys(e.tags).sort((a,b) => e.tags[b]-e.tags[a]).slice(0,4);
+    e.rain = r1(e.hours.reduce((s,h) => s + (h.rain||0), 0));
+    e.snow = r1(e.hours.reduce((s,h) => s + (h.snow||0), 0));
+    e.maxGust = Math.round(Math.max(...e.hours.map(h => h.gust||0)));
+    e.minTemp = Math.round(Math.min(...e.hours.map(h => h.temp)));
+    e.peakHour = e.hours.reduce((a,b) => b.score > a.score ? b : a, e.hours[0]);
+    e.durH = Math.round((e.end - e.start)/3600000);
+    e.minFL = Math.min(...e.hours.map(h => h.fl == null ? 99999 : h.fl));
+  }
+  return {scored, events};
+}
+
+/* ===ENGINE END=== */
+
+/* ============================================================
+   5. DATA FETCH
+   ============================================================ */
+const API = "https://api.open-meteo.com/v1/forecast";
+const HOURLY = ["temperature_2m","apparent_temperature","relative_humidity_2m","precipitation_probability",
+  "precipitation","rain","showers","snowfall","snow_depth","weather_code","pressure_msl","cloud_cover",
+  "visibility","wind_speed_10m","wind_direction_10m","wind_gusts_10m","freezing_level_height","cape"].join(",");
+const CURRENT = ["temperature_2m","apparent_temperature","relative_humidity_2m","is_day","precipitation",
+  "rain","snowfall","weather_code","cloud_cover","pressure_msl","surface_pressure","wind_speed_10m",
+  "wind_direction_10m","wind_gusts_10m"].join(",");
+const DAILY = ["weather_code","temperature_2m_max","temperature_2m_min","apparent_temperature_min",
+  "sunrise","sunset","precipitation_sum","rain_sum","snowfall_sum","precipitation_probability_max",
+  "wind_speed_10m_max","wind_gusts_10m_max","wind_direction_10m_dominant"].join(",");
+
+async function getJSON(url, tries){
+  tries = tries || 2;
+  let lastErr;
+  for(let i = 0; i < tries; i++){
+    try{
+      const r = await fetch(url, {cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return await r.json();
+    }catch(e){
+      lastErr = e;
+      if(i < tries-1) await new Promise(res => setTimeout(res, 900 * (i+1)));
+    }
+  }
+  throw lastErr;
+}
+
+function forecastURL(p){
+  const q = new URLSearchParams({
+    latitude: p.lat, longitude: p.lon,
+    current: CURRENT, hourly: HOURLY, daily: DAILY,
+    timezone: "Asia/Beirut", forecast_days: "10",
+    wind_speed_unit: "kmh", timeformat: "iso8601", models: "best_match"
+  });
+  if(p.el != null) q.set("elevation", Math.round(p.el));
+  return API + "?" + q.toString();
+}
+
+/* pack the hourly arrays into one object per hour, from the current hour on */
+function packHours(d, nowSite){
+  const H = d.hourly, out = [];
+  for(let i = 0; i < H.time.length; i++){
+    const t = ts(H.time[i]);
+    if(t < nowSite - 3600000) continue;      // drop hours already past
+    out.push({
+      t,
+      temp: H.temperature_2m[i],
+      feels: H.apparent_temperature ? H.apparent_temperature[i] : H.temperature_2m[i],
+      rh: H.relative_humidity_2m ? H.relative_humidity_2m[i] : null,
+      pop: H.precipitation_probability ? H.precipitation_probability[i] : null,
+      precip: H.precipitation[i],
+      rain: (H.rain ? H.rain[i] : 0) + (H.showers ? H.showers[i] : 0),
+      snow: H.snowfall ? H.snowfall[i] : 0,
+      depth: H.snow_depth ? H.snow_depth[i] : null,
+      code: H.weather_code[i],
+      slp: H.pressure_msl ? H.pressure_msl[i] : null,
+      cloud: H.cloud_cover ? H.cloud_cover[i] : null,
+      vis: H.visibility ? H.visibility[i] : null,
+      wind: H.wind_speed_10m[i],
+      dir: H.wind_direction_10m[i],
+      gust: H.wind_gusts_10m[i],
+      fl: H.freezing_level_height ? H.freezing_level_height[i] : null,
+      cape: H.cape ? H.cape[i] : null
+    });
+  }
+  return out;
+}
+
+/* ============================================================
+   6. RENDER
+   ============================================================ */
+let STATE = {place:null, data:null, hours:[], events:[], nowSite:0};
+
+function render(place, d){
+  const nowSite = Date.now() + (d.utc_offset_seconds||0)*1000;
+  const elevation = d.elevation != null ? d.elevation : place.el;
+  const hours = packHours(d, nowSite);
+  const {scored, events} = buildEvents(hours, elevation);
+  STATE = {place, data:d, hours:scored, events, nowSite, elevation};
+
+  renderHero(events, nowSite, place, scored);
+  renderAdvisor(scored, events, elevation, place, nowSite);
+  renderNow(d, place, elevation, scored);
+  renderMountain(d, scored, elevation);
+  renderHours(scored.slice(0,48), nowSite);
+  renderEvents(events, nowSite, elevation);
+  renderDays(d);
+  STATE.at = Date.now();
+  const nd = new Date(nowSite);
+  $("#stamp").textContent = "Updated " + String(nd.getUTCHours()).padStart(2,"0") + ":" +
+    String(nd.getUTCMinutes()).padStart(2,"0") + " Beirut time · refreshes itself every 10 minutes";
+  try{ localStorage.setItem("lsw:last", JSON.stringify({place, d, at:Date.now()})); }catch(e){}
+}
+
+function renderHero(events, now, place, scored){
+  const hero = $("#hero");
+  const next = events.find(e => e.end > now);
+  let lv = 0, title, sub, icon = "🏔️", tagline = "Storm outlook · " + place.n;
+  const cd = [];
+
+  if(!next){
+    lv = 0;
+    title = "No storms on the radar";
+    sub = "Nothing above advisory level in the next 10 days for " + place.n + ".";
+    icon = "🌤️";
+  } else {
+    lv = next.peak;
+    const live = next.start <= now;
+    const L = LEVELS[lv].n;
+    title = (live ? "" : "") + cap(next.kind) + (live ? " happening now" : " " + relTime(next.start, now));
+    icon = next.icon;
+    tagline = L + " · " + place.n + (place.a ? " · " + place.a : "");
+    const bits = [];
+    if(next.snow > 0.5) bits.push(r1(next.snow) + " cm of snow");
+    if(next.rain >= 1) bits.push(r1(next.rain) + " mm of rain");
+    if(next.maxGust >= 45) bits.push("gusts to " + next.maxGust + " km/h");
+    sub = (bits.length ? bits.join(" · ") : "Unsettled weather") + " over about " + next.durH + " h.";
+    cd.push("🕒 " + (live ? "ends " + relTime(next.end, now) : hh(next.start) + " " + dayName(next.start)));
+    cd.push("⏱️ " + next.durH + " h long");
+    cd.push("🔺 Peak " + LEVELS[next.peak].n.toLowerCase() + " at " + hh(next.peakHour.t));
+    if(next.tagList.length) cd.push("⚠️ " + next.tagList[0]);
+  }
+  hero.className = "hero lv" + lv;
+  hero.innerHTML =
+    '<div class="icon">' + icon + '</div>' +
+    '<div class="tagline">' + esc(tagline) + '</div>' +
+    '<h3>' + esc(title) + '</h3>' +
+    '<div class="sub">' + esc(sub) + '</div>' +
+    (cd.length ? '<div class="cd">' + cd.map(c => '<span class="pill">' + esc(c) + '</span>').join("") + '</div>' : "");
+
+  // pinned-tab signal
+  document.title = (next ? icon + " " + (next.start <= now ? "Storm now" : "Storm " + relTime(next.start, now)) + " · " : "") +
+                   place.n + " Storm Watch";
+}
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+
+function renderNow(d, place, elevation, scored){
+  const c = d.current, [txt, ic] = wmo(c.weather_code);
+  $("#nowPlace").textContent = "· " + place.n;
+  $("#nowBody").innerHTML =
+    '<div class="big">' + ic + '</div>' +
+    '<div class="tmp">' + Math.round(c.temperature_2m) + '°</div>' +
+    '<div class="meta">' +
+      '<div class="cond">' + esc(txt) + '</div>' +
+      '<div class="feels">Feels like ' + Math.round(c.apparent_temperature) + '° · ' +
+        esc(place.a || "") + '</div>' +
+      '<div class="feels">Elevation used: ' + Math.round(elevation) + ' m</div>' +
+    '</div>';
+
+  // 3-hour pressure trend from the hourly series
+  let trend = "";
+  if(scored.length > 3 && scored[0].slp != null){
+    const dp = r1(scored[3].slp - scored[0].slp);
+    trend = dp <= -2 ? "falling fast ↓↓" : dp <= -0.7 ? "falling ↓" : dp >= 2 ? "rising fast ↑↑" : dp >= 0.7 ? "rising ↑" : "steady →";
+  }
+  const st = [
+    ["Wind", Math.round(c.wind_speed_10m) + " km/h", arrow(c.wind_direction_10m) + " from " + compass(c.wind_direction_10m)],
+    ["Gusts", Math.round(c.wind_gusts_10m) + " km/h", c.wind_gusts_10m >= 60 ? "strong" : "normal"],
+    ["Humidity", Math.round(c.relative_humidity_2m) + "%", ""],
+    ["Pressure", Math.round(c.pressure_msl) + " hPa", trend],
+    ["Cloud", Math.round(c.cloud_cover) + "%", ""],
+    ["Rain now", r1(c.precipitation) + " mm", c.snowfall > 0 ? "snow falling" : ""]
+  ];
+  $("#nowStats").innerHTML = st.map(s =>
+    '<div class="stat"><div class="k">' + s[0] + '</div><div class="v">' + esc(s[1]) + '</div>' +
+    (s[2] ? '<div class="n">' + esc(s[2]) + '</div>' : '') + '</div>').join("");
+}
+
+function renderMountain(d, scored, elevation){
+  if(!scored.length){ $("#mtnRows").innerHTML = '<div class="muted">No hourly data for this point.</div>'; return; }
+  const next24 = scored.slice(0,24), next72 = scored.slice(0,72);
+  const fl = scored[0].fl;
+  const snow24 = r1(next24.reduce((s,h) => s + (h.snow||0), 0));
+  const snow72 = r1(next72.reduce((s,h) => s + (h.snow||0), 0));
+  const minFL = next72.length ? Math.min.apply(null, next72.map(h => h.fl == null ? 99999 : h.fl)) : 99999;
+  const coldest = Math.min.apply(null, next72.map(h => h.temp));
+  const maxGust = Math.round(Math.max.apply(null, next72.map(h => h.gust||0)));
+  const iceHours = next72.filter(h => h.temp <= 1 && h.precip > 0.2).length;
+  const depth = scored[0].depth != null ? r1(scored[0].depth * 100) : null;
+
+  // snow-line diagram: 0 m at bottom, 3200 m at top
+  const pct = m => clamp(100 - (m/3200)*100, 0, 100);
+  const sb = $("#snowbar");
+  const flTop = fl != null ? pct(fl) : null;
+  sb.innerHTML =
+    (flTop != null ? '<div class="zone" style="top:0;height:' + flTop + '%"></div>' +
+      '<div class="tag" style="top:' + clamp(flTop-2,0,86) + '%;right:6px;color:var(--snow)">snow line ' + Math.round(fl) + ' m</div>' : '') +
+    '<div class="me" style="top:' + pct(elevation) + '%"></div>' +
+    '<div class="tag" style="top:' + clamp(pct(elevation)+3,0,80) + '%;left:6px;color:#f59e0b">you · ' + Math.round(elevation) + ' m</div>';
+
+  const isSnowing = fl != null && fl < elevation + 100;
+  const rows = [
+    ["Precipitation type here", isSnowing ? "❄️ Snow" : (fl != null && fl < elevation + 400 ? "🌧️❄️ Rain/snow mix" : "🌧️ Rain")],
+    ["Snow line now", fl != null ? Math.round(fl) + " m (" + (fl > elevation ? Math.round(fl-elevation) + " m above you" : Math.round(elevation-fl) + " m below you") + ")" : "—"],
+    ["Lowest snow line (72 h)", minFL < 99999 ? Math.round(minFL) + " m" : "—"],
+    ["New snow · 24 h / 72 h", snow24 + " cm / " + snow72 + " cm"],
+    ["Snow on ground", depth != null ? depth + " cm" : "—"],
+    ["Coldest (72 h)", Math.round(coldest) + "°C"],
+    ["Strongest gust (72 h)", maxGust + " km/h"],
+    ["Icy-road hours (72 h)", iceHours + (iceHours >= 3 ? " ⚠️ black ice likely" : "")]
+  ];
+  $("#mtnRows").innerHTML = rows.map(r =>
+    '<div class="row"><span class="lbl">' + esc(r[0]) + '</span><span class="val">' + esc(r[1]) + '</span></div>').join("");
+}
+
+function renderHours(hrs, now){
+  const box = $("#hours"); box.innerHTML = "";
+  let lastDay = null;
+  hrs.forEach(h => {
+    const dn = dayName(h.t);
+    if(dn !== lastDay){ box.appendChild(el("div","daymark", esc(dn))); lastDay = dn; }
+    const [txt, ic] = wmo(h.code);
+    const gp = clamp((h.gust||0)/120*100, 2, 100);
+    const gcol = h.gust >= 80 ? "var(--sev)" : h.gust >= 60 ? "var(--warn)" : h.gust >= 40 ? "var(--adv)" : "var(--watch)";
+    const d = el("div","hr lv" + h.score);
+    d.title = txt + " · " + Math.round(h.temp) + "°C · gust " + Math.round(h.gust) + " km/h" +
+              (h.precip ? " · " + r1(h.precip) + " mm" : "") + (h.snow ? " · " + r1(h.snow) + " cm snow" : "") +
+              (h.score >= 2 ? "\n⚠ " + h.tags.join(", ") : "");
+    d.innerHTML = '<div class="t">' + hh(h.t) + '</div><div class="i">' + ic + '</div>' +
+      '<div class="d">' + Math.round(h.temp) + '°</div>' +
+      '<div class="g">' + (h.snow > 0 ? r1(h.snow) + "cm" : (h.precip > 0 ? r1(h.precip) + "mm" : (h.pop != null ? h.pop + "%" : "—"))) + '</div>' +
+      '<div class="bar"><i style="width:' + gp + '%;background:' + gcol + '"></i></div>';
+    box.appendChild(d);
+  });
+}
+
+function renderEvents(events, now, elevation){
+  const box = $("#events");
+  const up = events.filter(e => e.end > now);
+  $("#evCount").textContent = up.length ? "· " + up.length + " in the next 10 days" : "";
+  if(!up.length){
+    box.innerHTML = '<div class="muted">Nothing reaching advisory level in the next 10 days. ' +
+      'Quiet weather for ' + esc(STATE.place.n) + '.</div>';
+    return;
+  }
+  box.innerHTML = up.map(e => {
+    const L = LEVELS[e.peak];
+    const facts = [];
+    if(e.rain >= 0.5) facts.push(e.rain + " mm rain");
+    if(e.snow >= 0.3) facts.push(e.snow + " cm snow");
+    facts.push("gusts " + e.maxGust + " km/h");
+    facts.push("low " + e.minTemp + "°C");
+    if(e.minFL < 99999) facts.push("snow line " + Math.round(e.minFL) + " m");
+    const live = e.start <= now;
+    return '<div class="ev">' +
+      '<div class="ic">' + e.icon + '</div>' +
+      '<div class="body">' +
+        '<div class="ttl">' + esc(cap(e.kind)) + ' <span class="badge ' + L.cls + '">' + L.n + '</span>' +
+          (live ? '<span class="badge b4">live</span>' : '') + '</div>' +
+        '<div class="when">' + esc(dayName(e.start) + " " + dateShort(e.start) + ", " + hh(e.start) +
+          " → " + hh(e.end) + " · " + e.durH + " h · " + relTime(e.start, now)) + '</div>' +
+        '<div class="facts">' + facts.concat(e.tagList).map(f => '<span class="chip">' + esc(f) + '</span>').join("") + '</div>' +
+      '</div></div>';
+  }).join("");
+}
+
+/* ============================================================
+   6b. THE ADVISOR — turns the numbers into "so what do I do"
+   Everything here is computed on your phone. No key, no server.
+   ============================================================ */
+/* ===ADVISOR START=== */
+function summarise(scored, events, elevation, now){
+  const h72 = scored.slice(0,72), h24 = scored.slice(0,24);
+  const sum = (a,k) => a.reduce((s,x) => s + (x[k]||0), 0);
+  const max = (a,k) => a.length ? Math.max.apply(null, a.map(x => x[k]||0)) : 0;
+  const flMin = h72.length ? Math.min.apply(null, h72.map(x => x.fl == null ? 99999 : x.fl)) : 99999;
+  return {
+    gust72: Math.round(max(h72,"gust")), gust24: Math.round(max(h24,"gust")),
+    rain24: r1(sum(h24,"rain")), rain72: r1(sum(h72,"rain")),
+    snow24: r1(sum(h24,"snow")), snow72: r1(sum(h72,"snow")),
+    minTemp72: h72.length ? Math.round(Math.min.apply(null, h72.map(x => x.temp))) : null,
+    flMin, snowOnYou: flMin <= elevation + 100,
+    iceHours: h72.filter(x => x.temp <= 1 && x.precip > 0.2).length,
+    frostHours: h72.filter(x => x.temp <= 0).length,
+    thunder: h72.some(x => x.code >= 95),
+    hail: h72.some(x => x.code === 96 || x.code === 99),
+    fogHours: h72.filter(x => x.vis != null && x.vis < 800).length,
+    blizzard: events.some(e => e.kind === "blizzard" && e.end > now),
+    wetDay: r1(max(h24,"precip")) 
+  };
+}
+
+/* the calmest long stretch in the next 3 days — your window to get things done */
+function bestWindow(scored, now){
+  let best = null, run = null;
+  scored.slice(0,72).forEach(h => {
+    const good = h.score <= 1 && (h.precip||0) < 0.2 && (h.gust||0) < 40;
+    if(good){ run = run || {start:h.t, n:0}; run.n++; run.end = h.t + 3600000; }
+    else { if(run && (!best || run.n > best.n)) best = run; run = null; }
+  });
+  if(run && (!best || run.n > best.n)) best = run;
+  return best && best.n >= 4 ? best : null;
+}
+
+function advise(scored, events, elevation, place, now){
+  const s = summarise(scored, events, elevation, now);
+  const next = events.filter(e => e.end > now)[0];
+  const acts = [];
+  const A = (p, icon, text, when) => acts.push({p, icon, text: String(text).trim().replace(/\s+([.,])/g, "$1"), when});
+  const snowEv = events.find(e => e.end > now && (e.snow >= 3 || e.kind === "blizzard" || e.kind === "snowstorm"));
+  const snowWhen = snowEv ? dayName(snowEv.start) + " " + hh(snowEv.start) : "before the storm";
+
+  /* --- headline in plain language --- */
+  let say, why;
+  if(!next){
+    say = "Nothing is coming. <b>The next 10 days are quiet</b> over " + esc(place.n) + ".";
+    why = "No hour in the forecast reaches advisory level — winds stay under 45 km/h and there is no meaningful rain or snow.";
+  } else {
+    const live = next.start <= now;
+    const when = live ? "right now" : relTime(next.start, now) + ", around " + hh(next.start) + " on " + dayName(next.start);
+    say = "<b>" + esc(cap(next.kind)) + " " + esc(when) + ".</b> " +
+      (next.peak >= 4 ? "This is a serious one — plan for it today."
+       : next.peak === 3 ? "Strong enough to change your day."
+       : "Nothing dangerous, but you will feel it.");
+    const bits = [];
+    if(next.snow >= 0.5) bits.push(r1(next.snow) + " cm of snow at your height");
+    if(next.rain >= 1) bits.push(r1(next.rain) + " mm of rain");
+    if(next.maxGust >= 45) bits.push("gusts to " + next.maxGust + " km/h");
+    if(next.snow >= 0.5 && next.minFL < 99999) bits.push("snow line down to " + Math.round(next.minFL) + " m");
+    why = "Expect " + bits.join(", ") + " over roughly " + next.durH + " hours, worst around " +
+          hh(next.peakHour.t) + ". " + (next.tagList.length ? "Main hazard: " + next.tagList[0] + "." : "");
+  }
+
+  /* --- the checklist, ordered by urgency --- */
+  if(s.blizzard || (s.snow24 >= 15 && s.gust24 >= 50))
+    A(3,"🚫","<b>Do not travel during the storm.</b> Blowing snow on the mountain roads means no visibility and drifts that bury a car in minutes.","from " + snowWhen);
+  if(s.snowOnYou && s.snow72 >= 3){
+    A(3,"🚗","Chains in the boot and a full tank — <b>" + s.snow72 + " cm expected</b>. If you are not 4x4, move the car down to the main road before the first flakes.","before " + snowWhen);
+    A(2,"🔥","Fill the diesel for the sobia (مازوت) and check the gas bottle. " + (s.minTemp72 <= -3 ? "It is going to " + s.minTemp72 + "°C." : ""),"before " + snowWhen);
+    A(2,"🕯️","Charge the power banks and phones — snow on the lines means cuts, and the generator will not run all night.","today");
+    A(1,"🥖","Bread, water, batteries. If the road closes it is usually 24–48 h before the plough reaches the village.","today");
+  } else if(s.snow72 >= 1 && !s.snowOnYou){
+    A(1,"🌨️","Snow is falling above you (line at " + Math.round(s.flMin) + " m). Only an issue if you drive higher — Dahr el Baidar, Mzaar, the Cedars road.","this week");
+  }
+  if(s.iceHours >= 2 || (s.frostHours >= 4 && s.rain72 >= 2))
+    A(3,"🧊","<b>Black ice at dawn.</b> " + s.iceHours + " freezing wet hours ahead — the 05:00–09:00 window on shaded bends is where cars go off.","early morning");
+  if(s.frostHours >= 3)
+    A(2,"🚰","Wrap the outside pipes and let one tap drip overnight. " + s.frostHours + " hours below zero is enough to split a pipe or freeze the tank (خزان).","overnight");
+  if(s.gust72 >= 70)
+    A(s.gust72 >= 100 ? 3 : 2,"💨","<b>Gusts to " + s.gust72 + " km/h.</b> Tie down the water tank and solar panels, take in the awning and anything plastic, and park away from big trees and old walls.","before the wind");
+  if(s.gust72 >= 60)
+    A(1,"🔌","Expect EDL cuts and generator trips at this wind speed. Unplug what matters.","during");
+  if(s.rain24 >= 30 || s.wetDay >= 12)
+    A(3,"🌊","<b>" + s.rain24 + " mm in 24 h.</b> Clear the roof drains and the mazareeb now; valley roads flood and cut slopes slide when it comes this fast.","today");
+  else if(s.rain24 >= 12)
+    A(1,"☔","Heavy enough to flood a blocked gutter. Worth a two-minute check.","today");
+  if(s.thunder)
+    A(s.hail ? 3 : 2, s.hail ? "🧊" : "⛈️", s.hail
+      ? "<b>Hail possible.</b> Get the car under cover and protect the seedlings and vines."
+      : "Thunderstorms — unplug the TV and router, and stay off the ridges and open ground.","during the storm");
+  if(s.fogHours >= 4)
+    A(1,"🌫️","Thick cloud sitting on the mountain for about " + s.fogHours + " hours. Fog lights, and slow on the hairpins.","when driving");
+
+  const bw = bestWindow(scored, now);
+  if(bw) A(0,"✅","<b>Your clear window:</b> " + dayName(bw.start) + " " + hh(bw.start) + " → " + hh(bw.end) +
+            " is calm and dry. That is the time for the roof, the car, the wood, the drive.","plan for it");
+  if(!acts.length) A(0,"🌤️","Nothing to prepare. Enjoy it.","");
+
+  acts.sort((a,b) => b.p - a.p);
+  return {say, why, acts, s, next};
+}
+
+/* ===ADVISOR END=== */
+
+function renderAdvisor(scored, events, elevation, place, now){
+  const a = advise(scored, events, elevation, place, now);
+  ADVICE = a;
+  $("#advisor").innerHTML =
+    '<h2>What this means for you · شو يعني هيدا</h2>' +
+    '<div class="say">' + a.say + '</div>' +
+    '<div class="why">' + esc(a.why) + '</div>' +
+    '<ul class="acts">' + a.acts.map(x =>
+      '<li class="p' + x.p + '"><span class="ai">' + x.icon + '</span><span class="at">' + x.text +
+      (x.when ? '<span class="aw">' + esc(x.when) + '</span>' : '') + '</span></li>').join("") + '</ul>' +
+    '<div class="advbtns">' +
+      '<button class="btn" id="askClaude">🤖 Ask Claude about this</button>' +
+      '<button class="btn" id="shareBrief">📲 Send to someone</button>' +
+    '</div>';
+  $("#askClaude").addEventListener("click", askClaude);
+  $("#shareBrief").addEventListener("click", shareBrief);
+}
+let ADVICE = null;
+
+/* a compact, factual dump you can paste into Claude (or WhatsApp) */
+function briefingText(forClaude){
+  const p = STATE.place, d = STATE.data, now = STATE.nowSite, s = ADVICE ? ADVICE.s : {};
+  const up = STATE.events.filter(e => e.end > now).slice(0,4);
+  let t = "";
+  if(forClaude){
+    t += "You are my mountain weather advisor for Lebanon. Here is the live forecast for where I am. " +
+         "Tell me plainly what is coming, what I should do today and what I can leave. " +
+         "Ask me anything you need about my house, my car or my plans.\n\n";
+  }
+  t += "PLACE: " + p.n + " (" + p.lat + ", " + p.lon + ") at " + Math.round(STATE.elevation) + " m, Lebanon\n";
+  t += "TIME: " + new Date(now).toISOString().replace("T"," ").slice(0,16) + " Beirut\n";
+  t += "NOW: " + Math.round(d.current.temperature_2m) + "C, " + wmo(d.current.weather_code)[0] +
+       ", wind " + Math.round(d.current.wind_speed_10m) + " gusting " + Math.round(d.current.wind_gusts_10m) +
+       " km/h, " + Math.round(d.current.pressure_msl) + " hPa\n";
+  t += "NEXT 72H: rain " + s.rain72 + " mm, snow " + s.snow72 + " cm, lowest snow line " +
+       (s.flMin < 99999 ? Math.round(s.flMin) + " m" : "n/a") + ", coldest " + s.minTemp72 +
+       "C, peak gust " + s.gust72 + " km/h, freezing-wet hours " + s.iceHours + "\n";
+  t += up.length ? "STORMS:\n" + up.map(e =>
+       "- " + cap(e.kind) + " [" + LEVELS[e.peak].n + "] " + dayName(e.start) + " " + hh(e.start) +
+       " for " + e.durH + "h: " + e.rain + " mm rain, " + e.snow + " cm snow, gusts " + e.maxGust +
+       " km/h" + (e.tagList.length ? " (" + e.tagList.join("; ") + ")" : "")).join("\n") + "\n"
+     : "STORMS: none above advisory level in 10 days\n";
+  const D = d.daily;
+  t += "10-DAY: " + D.time.map((dt,i) => dt.slice(5) + " " + Math.round(D.temperature_2m_min[i]) + "/" +
+       Math.round(D.temperature_2m_max[i]) + "C " + (D.precipitation_sum[i] > 0 ? r1(D.precipitation_sum[i]) + "mm " : "") +
+       (D.snowfall_sum[i] > 0 ? r1(D.snowfall_sum[i]) + "cm " : "") + "g" + Math.round(D.wind_gusts_10m_max[i])).join(" | ") + "\n";
+  t += "Source: Open-Meteo. Severity levels computed locally by Lebanon Storm Watch.";
+  return t;
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); return true; }
+  catch(e){
+    const ta = document.createElement("textarea");
+    ta.value = t; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    let ok = false; try{ ok = document.execCommand("copy"); }catch(_){}
+    document.body.removeChild(ta); return ok;
+  }
+}
+async function askClaude(){
+  const ok = await copyText(briefingText(true));
+  banner(ok ? "📋 Forecast copied. Claude is opening in a new tab — just paste it and talk to it."
+            : "Could not copy automatically. Long-press to select the text in the box that opened.", "err");
+  setTimeout(() => banner(""), 9000);
+  window.open("https://claude.ai/new", "_blank", "noopener");
+}
+async function shareBrief(){
+  const t = briefingText(false);
+  if(navigator.share){ try{ await navigator.share({title:"Storm forecast · " + STATE.place.n, text:t}); return; }catch(e){} }
+  const ok = await copyText(t);
+  banner(ok ? "📋 Copied — paste it into WhatsApp." : "Copy failed on this browser.", "err");
+  setTimeout(() => banner(""), 6000);
+}
+
+function renderDays(d){
+  const D = d.daily, box = $("#days"); box.innerHTML = "";
+  for(let i = 0; i < D.time.length; i++){
+    const t = ts(D.time[i] + "T12:00");
+    const [txt, ic] = wmo(D.weather_code[i]);
+    const bits = [];
+    if(D.precipitation_sum[i] > 0) bits.push(r1(D.precipitation_sum[i]) + " mm");
+    if(D.snowfall_sum[i] > 0) bits.push(r1(D.snowfall_sum[i]) + " cm snow");
+    if(D.precipitation_probability_max[i] != null) bits.push(D.precipitation_probability_max[i] + "% chance");
+    bits.push("gust " + Math.round(D.wind_gusts_10m_max[i]) + " km/h " + compass(D.wind_direction_10m_dominant[i]));
+    const row = el("div","day");
+    row.innerHTML =
+      '<div class="dn">' + (i === 0 ? "Today" : dayName(t)) + '<small>' + dateShort(t) + '</small></div>' +
+      '<div class="di">' + ic + '</div>' +
+      '<div class="dd">' + esc(txt) + '<br><span class="muted">' + esc(bits.join(" · ")) + '</span></div>' +
+      '<div class="dt">' + Math.round(D.temperature_2m_max[i]) + '° <span>' + Math.round(D.temperature_2m_min[i]) + '°</span></div>';
+    box.appendChild(row);
+  }
+}
+
+/* ============================================================
+   7. LIVE RAIN RADAR (RainViewer + Leaflet)
+   ============================================================ */
+let map, radarLayers = [], frames = [], fIdx = 0, playing = false, playTimer = null, marker;
+
+function initMap(place){
+  if(typeof L === "undefined"){
+    $("#map").innerHTML = '<div style="padding:18px" class="muted">Radar needs the Leaflet library ' +
+      '(blocked offline or by your network). Everything else still works.</div>';
+    return;
+  }
+  if(!map){
+    map = L.map("map", {zoomControl:true}).setView([place.lat, place.lon], 8);
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+      maxZoom: 12, subdomains:"abcd",
+      attribution: '&copy; OpenStreetMap &copy; CARTO · radar RainViewer'
+    }).addTo(map);
+    loadRadar();
+  } else {
+    map.setView([place.lat, place.lon], map.getZoom());
+  }
+  if(marker) map.removeLayer(marker);
+  marker = L.circleMarker([place.lat, place.lon], {radius:7, color:"#f59e0b", weight:3, fillColor:"#fff", fillOpacity:1})
+            .addTo(map).bindTooltip(place.n, {permanent:false});
+}
+
+async function loadRadar(){
+  try{
+    const d = await getJSON("https://api.rainviewer.com/public/weather-maps.json");
+    const past = (d.radar && d.radar.past) || [];
+    const now = (d.radar && d.radar.nowcast) || [];
+    frames = past.slice(-10).concat(now).map(f => ({time:f.time, url: d.host + f.path + "/256/{z}/{x}/{y}/4/1_1.png", future: now.indexOf(f) >= 0}));
+    if(!frames.length) throw new Error("no frames");
+    radarLayers = frames.map(f => L.tileLayer(f.url, {opacity:0, zIndex:400, maxZoom:12}).addTo(map));
+    $("#frame").max = frames.length - 1;
+    fIdx = Math.max(0, frames.length - (d.radar.nowcast ? d.radar.nowcast.length : 0) - 1);
+    showFrame(fIdx);
+    play();
+  }catch(e){
+    $("#map").insertAdjacentHTML("beforeend",
+      '<div style="position:absolute;bottom:8px;left:8px;z-index:500;background:rgba(0,0,0,.6);padding:6px 10px;border-radius:8px;font-size:12px">Radar unavailable</div>');
+  }
+}
+function showFrame(i){
+  if(!radarLayers.length) return;
+  fIdx = (i + frames.length) % frames.length;
+  radarLayers.forEach((l, n) => l.setOpacity(n === fIdx ? 0.75 : 0));
+  $("#frame").value = fIdx;
+  const f = frames[fIdx];
+  const d = new Date(f.time * 1000);
+  const local = d.toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"});
+  $("#frameLbl").textContent = (f.future ? "forecast " : "") + local;
+}
+function play(){ playing = true; $("#play").textContent = "❚❚ Pause";
+  clearInterval(playTimer); playTimer = setInterval(() => showFrame(fIdx + 1), 550); }
+function pause(){ playing = false; $("#play").textContent = "▶︎ Play"; clearInterval(playTimer); }
+
+/* ============================================================
+   8. NATIONAL SCAN — one call for all regions
+   ============================================================ */
+function dayThreat(code, precip, snow, gust){
+  let s = 0;
+  if(gust >= 100) s = Math.max(s,5); else if(gust >= 80) s = Math.max(s,4);
+  else if(gust >= 60) s = Math.max(s,3); else if(gust >= 45) s = Math.max(s,2);
+  if(precip >= 60) s = Math.max(s,4); else if(precip >= 35) s = Math.max(s,3);
+  else if(precip >= 20) s = Math.max(s,2); else if(precip >= 8) s = Math.max(s,1);
+  if(snow >= 25) s = Math.max(s,4); else if(snow >= 15) s = Math.max(s,3);
+  else if(snow >= 6) s = Math.max(s,2); else if(snow >= 1) s = Math.max(s,1);
+  if(code === 99) s = Math.max(s,5); else if(code === 96) s = Math.max(s,4); else if(code === 95) s = Math.max(s,3);
+  if(code === 66 || code === 67) s = Math.max(s,4);
+  return s;
+}
+async function loadRegions(){
+  const box = $("#regions");
+  try{
+    const q = new URLSearchParams({
+      latitude: REGIONS.map(r => r.lat).join(","),
+      longitude: REGIONS.map(r => r.lon).join(","),
+      elevation: REGIONS.map(r => r.el).join(","),
+      daily: "weather_code,precipitation_sum,snowfall_sum,wind_gusts_10m_max,precipitation_probability_max",
+      timezone: "Asia/Beirut", forecast_days: "7", wind_speed_unit: "kmh"
+    });
+    const res = await getJSON(API + "?" + q.toString());
+    const arr = Array.isArray(res) ? res : [res];
+    box.innerHTML = arr.map((d, i) => {
+      const r = REGIONS[i] || {n:"?", a:""};
+      const D = d.daily;
+      let worst = 0, worstDay = -1;
+      for(let k = 0; k < D.time.length; k++){
+        const s = dayThreat(D.weather_code[k], D.precipitation_sum[k], D.snowfall_sum[k], D.wind_gusts_10m_max[k]);
+        if(s > worst){ worst = s; worstDay = k; }
+      }
+      const L = LEVELS[worst];
+      const when = worstDay < 0 ? "quiet all week" :
+        (worstDay === 0 ? "today" : dayName(ts(D.time[worstDay] + "T12:00"))) + " · " +
+        (D.snowfall_sum[worstDay] >= 1 ? r1(D.snowfall_sum[worstDay]) + " cm snow" :
+         D.precipitation_sum[worstDay] >= 1 ? r1(D.precipitation_sum[worstDay]) + " mm" :
+         Math.round(D.wind_gusts_10m_max[worstDay]) + " km/h gusts");
+      return '<div class="rg"><div class="rn">' + esc(r.n) + ' <small>' + esc(r.a) + '</small></div>' +
+        '<div class="rs">' + esc(L.n) + ' · ' + esc(when) + '</div>' +
+        '<div class="rb"><i style="width:' + (worst/5*100) + '%;background:' + L.col + '"></i></div></div>';
+    }).join("");
+  }catch(e){
+    box.innerHTML = '<div class="muted">Could not load the national scan (' + esc(e.message) + ').</div>';
+  }
+}
+
+/* ============================================================
+   9. CONTROLS + BOOT
+   ============================================================ */
+function fillSelect(){
+  const sel = $("#loc");
+  sel.innerHTML = "";
+  PLACES.forEach(g => {
+    const og = el("optgroup"); og.label = g.g;
+    g.list.forEach(p => {
+      const o = el("option", null, esc(p.n) + " · " + esc(p.a) + " (" + p.el + " m)");
+      o.value = p.lat + "," + p.lon;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  });
+}
+function syncSelect(p){
+  const sel = $("#loc"), key = p.lat + "," + p.lon;
+  const known = ALL.find(x => x.lat === p.lat && x.lon === p.lon);
+  let custom = document.getElementById("customOpt");
+  if(known){ if(custom) custom.remove(); sel.value = key; return; }
+  if(!custom){
+    custom = document.createElement("option");
+    custom.id = "customOpt";
+    sel.insertBefore(custom, sel.firstChild);
+  }
+  custom.value = key;
+  custom.textContent = p.n + (p.el != null ? " (" + Math.round(p.el) + " m)" : "");
+  sel.value = key;
+  CUSTOM = p;
+}
+let CUSTOM = null;
+const nearest = (lat, lon) => ALL.reduce((best, p) => {
+  const d = Math.pow(p.lat-lat,2) + Math.pow(p.lon-lon,2);
+  return d < best.d ? {d, p} : best;
+}, {d:1e9, p:ALL[0]});
+
+function banner(msg, kind){
+  $("#banner").innerHTML = msg ? '<div class="' + (kind || "err") + '" style="margin-bottom:12px">' + msg + '</div>' : "";
+}
+
+let reqId = 0;
+async function load(place, opts){
+  const mine = ++reqId;                      // only the newest request may paint
+  $("#reload").classList.add("busy");
+  try{
+    const d = await getJSON(forecastURL(place), 3);
+    if(mine !== reqId) return;
+    if(!d.hourly || !d.hourly.time) throw new Error("unexpected response");
+    banner("");
+    syncSelect(place);
+    render(place, d);
+    initMap(place);
+    try{ localStorage.setItem("lsw:place", JSON.stringify(place)); }catch(e){}
+  }catch(e){
+    if(mine !== reqId) return;
+    let cached = null;
+    try{ cached = JSON.parse(localStorage.getItem("lsw:last") || "null"); }catch(_){}
+    if(cached && cached.d){
+      render(cached.place, cached.d);
+      banner("⚠️ Live update failed (" + esc(e.message) + "). Showing the last forecast saved on this phone, from " +
+             new Date(cached.at).toLocaleString() + ".");
+    } else {
+      banner("⚠️ Could not reach the weather service (" + esc(e.message) + "). " +
+             "Check your connection and press ⟳.");
+    }
+  } finally {
+    if(mine === reqId) $("#reload").classList.remove("busy");
+  }
+}
+
+function useGPS(){
+  if(!navigator.geolocation){ banner("This browser has no GPS support — pick your village from the list."); return; }
+  $("#gps").classList.add("busy");
+  navigator.geolocation.getCurrentPosition(pos => {
+    $("#gps").classList.remove("busy");
+    const {latitude:lat, longitude:lon} = pos.coords;
+    const near = nearest(lat, lon).p;
+    const p = {n:"My spot (near " + near.n + ")", a:near.a, lat:r1(lat*10000)/10000, lon:r1(lon*10000)/10000, el:null};
+    load(p);
+  }, err => {
+    $("#gps").classList.remove("busy");
+    banner("Location denied or unavailable — choose your village from the list instead.");
+  }, {enableHighAccuracy:true, timeout:12000, maximumAge:600000});
+}
+
+async function search(){
+  const name = $("#q").value.trim();
+  if(name.length < 2) return;
+  $("#qmsg").textContent = "searching…";
+  try{
+    const r = await getJSON("https://geocoding-api.open-meteo.com/v1/search?count=10&language=en&name=" + encodeURIComponent(name));
+    let hits = (r.results || []).filter(x => x.country_code === "LB");
+    if(!hits.length) hits = r.results || [];
+    if(!hits.length){ $("#qmsg").textContent = "no match"; return; }
+    const h = hits[0];
+    $("#qmsg").textContent = "→ " + h.name + (h.admin1 ? ", " + h.admin1 : "") + " · " + Math.round(h.elevation || 0) + " m";
+    load({n:h.name, a:"", lat:h.latitude, lon:h.longitude, el:h.elevation != null ? h.elevation : null});
+  }catch(e){ $("#qmsg").textContent = "search failed"; }
+}
+
+function boot(){
+  fillSelect();
+  $("#loc").addEventListener("change", e => {
+    const [lat, lon] = e.target.value.split(",").map(Number);
+    const p = ALL.find(x => x.lat === lat && x.lon === lon) ||
+              (CUSTOM && CUSTOM.lat === lat && CUSTOM.lon === lon ? CUSTOM : null);
+    if(p) load(p);
+  });
+  $("#gps").addEventListener("click", useGPS);
+  $("#reload").addEventListener("click", () => load(STATE.place || ALL[0]));
+  $("#qgo").addEventListener("click", search);
+  $("#q").addEventListener("keydown", e => { if(e.key === "Enter") search(); });
+  $("#play").addEventListener("click", () => playing ? pause() : play());
+  $("#frame").addEventListener("input", e => { pause(); showFrame(Number(e.target.value)); });
+
+  let saved = null;
+  try{ saved = JSON.parse(localStorage.getItem("lsw:place") || "null"); }catch(e){}
+  const start = saved && saved.lat ? saved : DEFAULT_PLACE;
+  const match = ALL.find(p => p.lat === start.lat && p.lon === start.lon);
+  if(match) $("#loc").value = match.lat + "," + match.lon;
+  load(start);
+  loadRegions();
+
+  if(!saved) useGPS();                       // first visit: try to pin your exact ridge
+
+  // keep it fresh
+  setInterval(() => { if(!document.hidden) load(STATE.place || start); }, 10*60*1000);
+  document.addEventListener("visibilitychange", () => {
+    if(!document.hidden && Date.now() - (STATE.at || 0) > 10*60*1000) load(STATE.place || start);
+  });
+}
+const DEFAULT_PLACE = ALL.find(p => p.n === "Amchit") || ALL[0];
+document.addEventListener("DOMContentLoaded", boot);
+</script>
+</body>
+</html>

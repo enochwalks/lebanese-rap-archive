@@ -1,9 +1,14 @@
 {
   "_comment": "Edit ONLY this file to change what the watchdog cares about. Coordinates come from the app: open it, allow location, tap 'Ask Claude about this' and the PLACE line holds your exact lat/lon/elevation.",
   "places": [
-    { "n": "Faraya", "lat": 34.0139, "lon": 35.8000, "el": 1500 }
+    {
+      "n": "Amchit",
+      "lat": 34.1533,
+      "lon": 35.645,
+      "el": 60
+    }
   ],
-  "alertLevel": 3,
+  "alertLevel": 4,
   "horizonHours": 48,
   "severeHorizonHours": 96
 }
