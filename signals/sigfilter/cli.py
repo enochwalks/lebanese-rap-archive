@@ -17,9 +17,13 @@ def cmd_login(_args):
 
     client = listener.build_client()
     with client:
-        client.loop.run_until_complete(client.get_me())
-        print("\nLogged in. Put this in your .env as TG_SESSION (keep it secret —")
-        print("it is full access to your Telegram account):\n")
+        me = client.loop.run_until_complete(client.get_me())
+        name = getattr(me, "first_name", None) or getattr(me, "username", "?")
+        print(f"\nLogged in as {name}. The session is saved locally, so you will")
+        print("not be asked for the code again on this machine.\n")
+        print("Only if you plan to run this on GitHub Actions, copy the line below")
+        print("into .env as TG_SESSION (it is full access to your account, so use")
+        print("a separate Telegram account for that):\n")
         print(StringSession.save(client.session))
 
 

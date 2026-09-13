@@ -24,7 +24,13 @@ def build_client():
     if not api_id or not api_hash:
         raise SystemExit("TG_API_ID and TG_API_HASH must be set (see .env.example)")
     session_str = os.environ.get("TG_SESSION")
-    session = StringSession(session_str) if session_str else StringSession()
+    if session_str:
+        session = StringSession(session_str)          # headless / CI
+    else:
+        # A file-backed session, so logging in once is actually once. An empty
+        # StringSession lives in memory only and would re-prompt for the phone
+        # code on every command, which Telegram rate-limits.
+        session = str(config.ROOT / "sigfilter.session")
     return TelegramClient(session, int(api_id), api_hash)
 
 
