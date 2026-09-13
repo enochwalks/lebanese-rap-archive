@@ -30,6 +30,27 @@ Barouk, Rachaya, Qammoua, Jezzine…), plus GPS ("My spot") and a search box for
 Passing your village's real elevation makes the model downscale to your ridge instead of
 averaging the whole valley — that is what gets the snow line right.
 
+## The agent (`agent/watch.mjs` + `.github/workflows/storm-watch.yml`)
+
+The app only knows things while you are looking at it. The agent runs without you:
+a GitHub Actions job wakes every 3 hours, pulls the forecast for the places in
+`agent/config.json`, and **opens a GitHub issue when a storm crosses your alert level** —
+which GitHub then emails and pushes to your phone. When the storm has passed it comments
+and closes the issue by itself.
+
+It does not keep a second copy of the forecasting logic: it extracts the scoring, the storm
+grouping and the advice out of `index.html` at runtime, between the `===SHARED===`,
+`===ENGINE===` and `===ADVISOR===` markers. Change a threshold in the app and the agent
+changes with it.
+
+* Enable it: Actions tab → *Storm watch* → **Run workflow** (GitHub disables schedules on
+  forks and on repos with no recent activity until you do this once).
+* Tune it: `agent/config.json` — `places` (name, lat, lon, elevation), `alertLevel`
+  (3 = Warning, 4 = Severe), `horizonHours`, `severeHorizonHours`.
+* Test it without touching GitHub: `DRY_RUN=1 node weather/agent/watch.mjs` — it prints the
+  issue it *would* open.
+* Cost: nothing. No API key, no secrets — it uses the repo's own `GITHUB_TOKEN`.
+
 ## Storm levels
 
 `Calm → Watch → Advisory → Warning → Severe → Extreme`, scored per hour from wind gusts,

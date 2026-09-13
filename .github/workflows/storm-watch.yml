@@ -1,0 +1,25 @@
+name: Storm watch
+
+# The agent. Wakes up on its own, looks at the mountain, and opens an issue
+# (which GitHub emails and pushes to your phone) when a storm is coming.
+on:
+  schedule:
+    - cron: "0 */3 * * *"     # every 3 hours, UTC
+  workflow_dispatch:           # ...and whenever you tap "Run workflow"
+
+permissions:
+  issues: write                # the only permission it needs
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Look at the sky
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node weather/agent/watch.mjs
