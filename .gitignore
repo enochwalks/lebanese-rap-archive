@@ -45,3 +45,9 @@ fix_uploader.py
 reset.py
 reset_song.py
 video_builder_BACKUP.py
+
+# signals/ subproject: local secrets, sessions and database
+signals/.env
+signals/config.yaml
+signals/*.db
+signals/*.session

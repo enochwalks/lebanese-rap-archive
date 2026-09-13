@@ -1,0 +1,64 @@
+name: Signal Filter
+
+# Free "always on" option: polls your channels on a schedule instead of holding
+# a live connection. Latency is minutes, not seconds — see signals/README.md for
+# when that matters and what to run instead.
+#
+# Requires repo secrets: TG_API_ID, TG_API_HASH, TG_SESSION  (optional: NTFY_TOPIC)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: signal-filter
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      # The database lives on its own branch so history and channel trust
+      # survive between runs without polluting the main branch.
+      - name: Restore state
+        run: |
+          git config user.name  "signal-filter"
+          git config user.email "signal-filter@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin signal-state; then
+            git fetch origin signal-state
+            git worktree add .state origin/signal-state
+          else
+            git worktree add --detach .state
+            cd .state && git checkout --orphan signal-state && git rm -rf . || true
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r signals/requirements.txt
+
+      - name: Poll channels
+        working-directory: signals
+        env:
+          TG_API_ID: ${{ secrets.TG_API_ID }}
+          TG_API_HASH: ${{ secrets.TG_API_HASH }}
+          TG_SESSION: ${{ secrets.TG_SESSION }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          SIGFILTER_DB: ${{ github.workspace }}/.state/signals.db
+        run: python -m sigfilter.cli poll --limit 50
+
+      - name: Save state
+        if: always()
+        working-directory: .state
+        run: |
+          git add -A signals.db || true
+          git diff --cached --quiet && echo "no change" && exit 0
+          git commit -m "signal-filter state $(date -u +%FT%TZ)"
+          git push origin HEAD:signal-state

@@ -1,0 +1,46 @@
+# Copy to config.yaml and edit. config.yaml is git-ignored.
+
+# Channels to read. Get the ids with:  python -m sigfilter.cli channels
+# You must already be a member of each one.
+sources:
+  - id: -1001111111111
+    name: "Example Crypto VIP"
+    weight: 1.0          # multiplier on this channel's trust score (0.0 mutes it)
+  - id: -1002222222222
+    name: "Example Gold Signals"
+    weight: 1.0
+
+# Where the accepted signals go.
+# "me" = your own Saved Messages. Or a channel/group id you own.
+destination: "me"
+
+gate:
+  min_score: 70          # 0-100. Raise it to get fewer, better signals.
+  require_stop_loss: true
+  min_risk_reward: 1.2   # (TP1 - entry) / (entry - SL)
+  max_leverage: 20       # signals above this are rejected outright
+  max_age_minutes: 20    # ignore anything older than this when it arrives
+  daily_cap: 8           # hard stop on how many signals get forwarded per day
+
+consensus:
+  window_minutes: 45     # how long two channels can be apart and still "agree"
+  near_duplicate_ratio: 0.82  # above this text similarity = copy-paste, not agreement
+
+scoring:
+  weights:
+    channel_trust: 30
+    completeness: 15
+    risk_reward: 15
+    consensus: 20
+    discipline: 10       # penalties for hype / no SL / insane leverage
+    freshness: 10
+  trust_prior_trades: 10 # how much evidence before a channel's record outweighs the 50% prior
+
+outcomes:
+  enabled: true          # auto-grade crypto signals against Binance klines -> updates trust
+  horizon_hours: 24
+  poll_minutes: 30
+
+llm_fallback:
+  enabled: false         # if true, unparseable messages go to Claude (costs money, not free)
+  model: "claude-sonnet-5"

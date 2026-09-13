@@ -1,0 +1,108 @@
+# sigfilter — one gold signal instead of forty noisy ones
+
+Reads every Telegram signal channel you're already a member of, parses each post
+into a structured trade, scores it, and forwards **only** what clears the gate to
+one place (your Saved Messages, a private channel, and optionally your phone).
+
+Everything here runs on free infrastructure: the Telegram API is free, Binance's
+public price endpoint needs no key, and `ntfy.sh` push needs no account.
+
+## What it actually does
+
+```
+channels ──► parse ──► dedupe ──► consensus ──► score ──► gate ──► you
+             │         │          │             │         │
+             │         │          │             │         └─ hard rules: no SL,
+             │         │          │             │            bad R:R, stale,
+             │         │          │             │            daily cap
+             │         │          │             └─ 6 weighted components,
+             │         │          │                every one shown to you
+             │         │          └─ do other channels agree, disagree,
+             │         │             or are they just copy-pasting?
+             │         └─ same post, reposted or relayed, counts once
+             └─ strict: a post it can't read confidently is dropped,
+                never guessed at
+```
+
+**The six scoring components** (weights in `config.yaml`):
+
+| Component | What it measures |
+|---|---|
+| `channel_trust` (30) | That channel's own graded win/loss record, Wilson lower bound so a 3-for-3 newcomer can't outrank a 60-for-100 veteran |
+| `completeness` (15) | Entry, target *and* stop present; parse warnings subtract |
+| `risk_reward` (15) | `(TP1 − entry) / (entry − SL)`. Zero below your minimum, saturates at 3R because bigger printed targets are usually fiction |
+| `consensus` (20) | Independent channels calling the same direction in the same window |
+| `discipline` (10) | Penalties for missing stops, 50x leverage, "GUARANTEED", all-caps, 8-target ladders |
+| `freshness` (10) | An entry price 40 minutes old is usually already gone |
+
+**The two things that make this more than a regex:**
+
+1. **Copy-paste detection.** Most signal channels relay each other. Three channels
+   posting the same text is *one* source wearing three hats, and counting it as
+   agreement is the fastest way to build a filter that is confidently wrong. Posts
+   above `near_duplicate_ratio` text similarity collapse to a single vote.
+2. **Outcomes feed back into trust.** Every crypto signal is graded against Binance
+   candles — did TP1 trade before SL? Channels that are right earn weight; channels
+   that are wrong lose it, automatically. Without this loop "trust" is just a number
+   you made up.
+
+## Setup (about 10 minutes)
+
+```bash
+cd signals
+pip install -r requirements.txt
+cp .env.example .env          # fill in TG_API_ID / TG_API_HASH from my.telegram.org
+cp config.example.yaml config.yaml
+
+python -m sigfilter.cli login       # one-time; prints a TG_SESSION string for .env
+python -m sigfilter.cli channels    # lists your chats + their ids
+#   paste the ids of the signal channels into config.yaml under `sources:`
+python -m sigfilter.cli watch       # go
+```
+
+## Running it 24/7, free
+
+| Option | Latency | Notes |
+|---|---|---|
+| Any always-on machine (old laptop, Raspberry Pi, free-tier VPS) running `watch` | seconds | Best. Add a `systemd` unit or `tmux` so it restarts |
+| GitHub Actions (`.github/workflows/signal-filter.yml`, `poll` mode) | 10–25 min | Truly free, zero hardware. Scheduled runs are delayed under load, and GitHub disables schedules after 60 days of repo inactivity |
+
+For scalping, minutes of latency destroys the edge — use `watch` on real hardware.
+For swing entries with a wide entry zone, `poll` is fine.
+
+**Security:** `TG_SESSION` is full access to your Telegram account. If you put it in
+GitHub Secrets, use a **separate Telegram account** that is only a member of the
+signal channels — never your main one. Telegram may also challenge logins coming
+from datacenter IPs.
+
+## Tuning it
+
+```bash
+# Score a real post from one of your channels, without touching Telegram:
+python -m sigfilter.cli test --text "XAUUSD BUY 2340 TP 2365 SL 2332"
+
+python -m sigfilter.cli recent    # what passed, what failed, and why
+python -m sigfilter.cli stats     # per-channel record and current trust
+```
+
+**Expect near-silence in week one, by design.** With no graded history every channel
+sits at the neutral 0.5 prior, so a clean but unconfirmed signal scores around 65 and
+a perfect one caps near 75. Start at `min_score: 60` while the record builds, run
+`stats` after a week or two, then raise it to 70–75 and set `weight: 0.0` on the
+channels that have proven themselves useless. That tightening is the whole product —
+the code just gives you the evidence to do it.
+
+## Honest limits
+
+- **Only crypto outcomes are auto-graded.** Forex, gold and indices need a priced
+  data feed with an API key; those signals stay ungraded, so those channels keep
+  the neutral prior unless you set `weight` by hand.
+- **Grading is conservative.** If one 5-minute candle touches both TP and SL we
+  can't tell which came first, so it's scored a loss. Assuming the good fill is
+  how backtests lie to you.
+- **The filter cannot make a bad channel profitable.** It measures completeness,
+  discipline and consistency — not whether the analysis is any good. A channel
+  that posts beautifully-formatted losing trades will score well until enough
+  outcomes accumulate to sink it. Paper-trade the output before risking money.
+- **Parsing is strict on purpose.** Some real signals in unusual formats will be
+  dropped. A missed signal costs nothing; a mis-parsed stop-loss costs money.
