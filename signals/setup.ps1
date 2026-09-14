@@ -57,6 +57,9 @@ if (-not (Test-Path "config.yaml")) {
 }
 
 # 4. Tell them exactly what comes next.
+# 5. Desktop shortcuts, so none of this needs a terminal day to day.
+& powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "shortcuts.ps1")
+
 Write-Host ""
 Write-Host "=== Next steps ===" -ForegroundColor Cyan
 Write-Host ""
@@ -68,7 +71,8 @@ Write-Host ""
 Write-Host "3. Then run these, one line at a time:"
 Write-Host "       .\run.ps1 login" -ForegroundColor Yellow
 Write-Host "       .\run.ps1 channels" -ForegroundColor Yellow
-Write-Host "   Copy the channel ids into config.yaml, then:"
+Write-Host "   Copy the channel ids into config.yaml, then use the Desktop shortcuts,"
+Write-Host "   or run it here with:"
 Write-Host "       .\run.ps1 watch" -ForegroundColor Yellow
 Write-Host ""
 

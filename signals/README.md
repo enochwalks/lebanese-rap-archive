@@ -118,6 +118,17 @@ from datacenter IPs.
 ## Watching it work
 
 ```powershell
+.\shortcuts.ps1          # puts two shortcuts on your Desktop (setup.ps1 does this too)
+```
+
+**Signal Dashboard** starts the local server if it isn't already up and opens the
+page; double-clicking it twice is harmless. **Start Signal Agent** runs the
+listener in a visible window, and is only needed if you skipped
+`install-task.ps1`. Remove both with `.\shortcuts.ps1 -Remove`.
+
+From a terminal instead:
+
+```powershell
 .\run.ps1 dashboard      # opens http://127.0.0.1:8765 in your browser
 ```
 

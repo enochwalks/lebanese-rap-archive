@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sigfilter</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --surface:        #1a1a19;
+    --panel:          #232322;
+    --panel-2:        #2b2b29;
+    --line:           #383835;
+    --text:           #ffffff;
+    --text-2:         #c3c2b7;
+    --text-3:         #8a8a80;
+    --bar:            #3987e5;
+    --good:           #0ca30c;
+    --warning:        #fab219;
+    --critical:       #d03b3b;
+    --mono: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0 16px 48px;
+    background: var(--surface); color: var(--text);
+    font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 20px 0 16px; border-bottom: 1px solid var(--line); margin-bottom: 20px;
+  }
+  h1 { font-size: 17px; margin: 0; letter-spacing: .02em; font-weight: 600; }
+  h1 span { color: var(--text-3); font-weight: 400; }
+  .status {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 4px 11px 4px 9px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: .04em;
+    border: 1px solid var(--line); background: var(--panel);
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .status.live .dot { background: var(--good); animation: pulse 2s ease-in-out infinite; }
+  .status.live { color: var(--good); border-color: #1d4a1d; }
+  .status.down .dot { background: var(--critical); }
+  .status.down { color: var(--critical); border-color: #4a1d1d; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
+  .meta { margin-left: auto; color: var(--text-3); font-size: 12px; font-family: var(--mono); }
+
+  h2 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--text-3); margin: 28px 0 10px; font-weight: 600;
+  }
+
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .tile .n { font-size: 26px; font-weight: 600; font-family: var(--mono); line-height: 1.1; }
+  .tile .k { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; margin-top: 5px; }
+  .tile.pass .n { color: var(--good); }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 18px; }
+  .signal-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .sym { font-size: 21px; font-weight: 600; font-family: var(--mono); }
+  .side { font-size: 12px; font-weight: 700; letter-spacing: .06em; padding: 2px 8px; border-radius: 4px; }
+  .side.BUY  { color: var(--good);     background: #0ca30c1f; }
+  .side.SELL { color: var(--critical); background: #d03b3b1f; }
+  .hero { margin-left: auto; text-align: right; }
+  .hero .n { font-size: 30px; font-weight: 600; font-family: var(--mono); line-height: 1; }
+  .hero .k { font-size: 10px; color: var(--text-3); letter-spacing: .08em; text-transform: uppercase; }
+
+  .levels { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; margin-bottom: 18px; }
+  .lvl { background: var(--panel-2); border-radius: 6px; padding: 9px 11px; }
+  .lvl .k { font-size: 10px; color: var(--text-3); letter-spacing: .07em; text-transform: uppercase; }
+  .lvl .v { font-family: var(--mono); font-size: 15px; margin-top: 3px; }
+
+  .bars { display: grid; gap: 7px; }
+  .bar-row { display: grid; grid-template-columns: 104px 1fr 44px; align-items: center; gap: 10px; }
+  .bar-row .lab { font-size: 12px; color: var(--text-2); text-transform: capitalize; }
+  .track { position: relative; height: 10px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+  .fill { position: absolute; inset: 0 auto 0 0; background: var(--bar); border-radius: 0 4px 4px 0; }
+  .cap { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--line); transform: translateX(-2px); }
+  .bar-row .val { font-family: var(--mono); font-size: 12px; color: var(--text-2); text-align: right; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th {
+    text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .07em;
+    color: var(--text-3); font-weight: 600; padding: 0 10px 8px; border-bottom: 1px solid var(--line);
+  }
+  td { padding: 9px 10px; border-bottom: 1px solid #2a2a28; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+  .scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 4px 4px; }
+
+  .v-pass, .v-fail { display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-size: 12px; }
+  .v-pass { color: var(--good); }
+  .v-fail { color: var(--text-3); }
+  .reason { color: var(--text-3); font-size: 12px; }
+  .chan { color: var(--text-2); }
+  .pill { font-size: 11px; font-family: var(--mono); padding: 1px 6px; border-radius: 4px; background: var(--panel-2); color: var(--text-2); }
+  .pill.bad { color: var(--critical); background: #d03b3b1f; }
+  .pill.warn { color: var(--warning); background: #fab2191f; }
+  .pill.win  { color: var(--good);     background: #0ca30c1f; }
+  .empty { color: var(--text-3); padding: 24px 10px; text-align: center; }
+  footer { color: var(--text-3); font-size: 12px; margin-top: 28px; }
+
+  #tip {
+    position: fixed; z-index: 10; pointer-events: none; opacity: 0;
+    transform: translate(-50%, -125%); transition: opacity .1s;
+    background: #0f0f0e; border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 9px; font-size: 12px; white-space: nowrap; line-height: 1.5;
+    box-shadow: 0 4px 14px #0008;
+  }
+  @media (max-width: 720px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .levels { grid-template-columns: repeat(2, 1fr); }
+    .bar-row { grid-template-columns: 88px 1fr 40px; }
+    .meta { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>sigfilter <span>/ signal desk</span></h1>
+    <span id="status" class="status down"><span class="dot"></span><span id="status-text">CHECKING</span></span>
+    <span class="meta" id="meta">&nbsp;</span>
+  </header>
+
+  <h2>Today</h2>
+  <div class="tiles">
+    <div class="tile"><div class="n" id="t-messages">-</div><div class="k">Messages read</div></div>
+    <div class="tile"><div class="n" id="t-parsed">-</div><div class="k">Look like trades</div></div>
+    <div class="tile pass"><div class="n" id="t-sent">-</div><div class="k">Passed the gate</div></div>
+    <div class="tile"><div class="n" id="t-blocked">-</div><div class="k">Blocked</div></div>
+  </div>
+
+  <h2>Latest signal that passed</h2>
+  <div class="card" id="latest"><div class="empty">Nothing has passed the gate yet.</div></div>
+
+  <h2>Everything it looked at</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Time</th><th>Instrument</th><th class="num">Score</th>
+        <th>Verdict</th><th>Channel</th><th>Why</th>
+      </tr></thead>
+      <tbody id="feed"><tr><td class="empty" colspan="6">No messages scored yet.</td></tr></tbody>
+    </table>
+  </div>
+
+  <h2>Channel quality</h2>
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Channel</th><th class="num">Msgs</th><th class="num">Trades</th><th class="num">Sent</th>
+        <th class="num">W</th><th class="num">L</th><th class="num">Avg</th>
+        <th class="num">Promo</th><th class="num">Trust</th>
+      </tr></thead>
+      <tbody id="channels"><tr><td class="empty" colspan="9">No channels seen yet.</td></tr></tbody>
+    </table>
+  </div>
+
+  <footer id="foot"></footer>
+</div>
+<div id="tip"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const tip = $("tip");
+
+function ago(seconds) {
+  if (seconds < 60) return seconds + "s ago";
+  if (seconds < 3600) return Math.floor(seconds / 60) + "m ago";
+  if (seconds < 86400) return Math.floor(seconds / 3600) + "h ago";
+  return Math.floor(seconds / 86400) + "d ago";
+}
+function clock(ts) {
+  return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+function num(v, digits = 0) {
+  return v === null || v === undefined ? "-" : Number(v).toFixed(digits);
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+function showTip(el, html) {
+  el.addEventListener("mousemove", e => {
+    tip.innerHTML = html;
+    tip.style.left = e.clientX + "px";
+    tip.style.top = e.clientY + "px";
+    tip.style.opacity = 1;
+  });
+  el.addEventListener("mouseleave", () => { tip.style.opacity = 0; });
+}
+
+function renderLatest(s, gate) {
+  if (!s) return;
+  const rr = s.rr ? s.rr.toFixed(2) : "-";
+  // One shared scale across every row: bar length must mean "points contributed",
+  // so the longest bar is the component that actually carried the score. Scaling
+  // each row to its own maximum would make a maxed-out 10-point component
+  // out-draw a 15-of-30 one. The tick marks each component's own ceiling.
+  const scale = Math.max(...(s.breakdown || []).map(c => c.max_points), 1);
+  const bars = (s.breakdown || []).map(c => {
+    const pct = Math.max(0, Math.min(100, (c.points / scale) * 100));
+    const cap = Math.max(0, Math.min(100, (c.max_points / scale) * 100));
+    return `<div class="bar-row">
+      <div class="lab">${esc(c.name)}</div>
+      <div class="track" data-tip="<b>${esc(c.name)}</b><br>${num(c.points, 1)} of ${num(c.max_points, 1)} possible points">
+        <div class="cap" style="left:${cap.toFixed(1)}%"></div>
+        <div class="fill" style="width:${pct.toFixed(1)}%"></div>
+      </div>
+      <div class="val">${num(c.points, 1)}</div>
+    </div>`;
+  }).join("");
+
+  $("latest").innerHTML = `
+    <div class="signal-head">
+      <span class="sym">${esc(s.symbol)}</span>
+      <span class="side ${esc(s.side)}">${esc(s.side)}</span>
+      <span class="reason">${esc(s.channel)} &middot; ${clock(s.ts)}</span>
+      <span class="hero"><div class="n">${num(s.score, 1)}</div><div class="k">score / 100</div></span>
+    </div>
+    <div class="levels">
+      <div class="lvl"><div class="k">Entry</div><div class="v">${num(s.entry, 2)}</div></div>
+      <div class="lvl"><div class="k">Target</div><div class="v">${num(s.tp1, 2)}</div></div>
+      <div class="lvl"><div class="k">Stop</div><div class="v">${num(s.sl, 2)}</div></div>
+      <div class="lvl"><div class="k">Risk : Reward</div><div class="v">${rr}</div></div>
+    </div>
+    <div class="bars">${bars}</div>
+    <div class="reason" style="margin-top:12px">
+      Gate: score must reach ${gate.min_score}, risk:reward at least ${gate.min_risk_reward}, stop-loss required.
+    </div>`;
+  document.querySelectorAll("#latest .track").forEach(t => showTip(t, t.dataset.tip));
+}
+
+function renderFeed(rows) {
+  if (!rows.length) return;
+  $("feed").innerHTML = rows.map(r => {
+    const pass = r.verdict === "ACCEPT";
+    const why = pass
+      ? (r.outcome
+          ? `<span class="pill ${r.outcome === "WIN" ? "win" : (r.outcome === "LOSS" ? "bad" : "")}">${
+              r.outcome === "WIN" ? "&#10003; " : (r.outcome === "LOSS" ? "&#10005; " : "")}${esc(r.outcome)}</span>`
+          : '<span class="reason">sent to Saved Messages</span>')
+      : `<span class="reason">${esc((r.reasons || [])[0] || "")}</span>`;
+    return `<tr>
+      <td class="num">${clock(r.ts)}</td>
+      <td><b>${esc(r.symbol || "?")}</b> <span class="reason">${esc(r.side || "")}</span></td>
+      <td class="num">${num(r.score, 1)}</td>
+      <td>${pass ? '<span class="v-pass">&#10003; sent</span>' : '<span class="v-fail">&#10005; blocked</span>'}</td>
+      <td class="chan">${esc(r.channel || "?")}</td>
+      <td>${why}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderChannels(rows) {
+  if (!rows.length) return;
+  $("channels").innerHTML = rows.map(c => {
+    let promo = '<span class="reason">-</span>';
+    if (c.promo_pct !== null) {
+      const cls = c.promo_pct >= 30 ? "pill bad" : (c.promo_pct >= 10 ? "pill warn" : "pill");
+      promo = `<span class="${cls}">${c.promo_pct.toFixed(0)}%</span>`;
+    }
+    const trustCls = c.trust < 0.4 ? "pill bad" : (c.trust < 0.55 ? "pill warn" : "pill");
+    return `<tr>
+      <td>${esc(c.name)}${c.muted ? ' <span class="pill">muted</span>' : ""}</td>
+      <td class="num">${c.messages}</td>
+      <td class="num">${c.seen}</td>
+      <td class="num">${c.sent}</td>
+      <td class="num">${c.wins}</td>
+      <td class="num">${c.losses}</td>
+      <td class="num">${num(c.avg_score, 1)}</td>
+      <td class="num">${promo}</td>
+      <td class="num"><span class="${trustCls}">${c.trust.toFixed(2)}</span></td>
+    </tr>`;
+  }).join("");
+}
+
+async function refresh() {
+  let d;
+  try {
+    d = await (await fetch("/api/state", { cache: "no-store" })).json();
+  } catch (e) {
+    $("status").className = "status down";
+    $("status-text").textContent = "NO CONNECTION";
+    return;
+  }
+  const live = d.alive;
+  $("status").className = "status " + (live ? "live" : "down");
+  $("status-text").textContent = live ? "LISTENING" : "NOT RUNNING";
+  $("meta").textContent = d.channels_watched + " channels watched  ·  "
+    + (d.heartbeat ? "last check " + ago(d.now - d.heartbeat) : "never started");
+
+  $("t-messages").textContent = d.today.messages;
+  $("t-parsed").textContent = d.today.parsed;
+  $("t-sent").textContent = d.today.forwarded;
+  $("t-blocked").textContent = Math.max(0, d.today.parsed - d.today.accepted);
+
+  renderLatest(d.latest, d.gate);
+  renderFeed(d.recent);
+  renderChannels(d.channels);
+  $("foot").textContent = "Refreshes every 5 seconds · reads signals.db on this PC · nothing leaves your machine.";
+}
+
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>
