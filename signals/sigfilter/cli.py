@@ -54,6 +54,65 @@ def cmd_channels(_args):
     asyncio.run(run())
 
 
+def cmd_pick(args):
+    """List your chats, let you choose, write config.yaml for you."""
+    from . import listener, picker
+
+    client = listener.build_client()
+    cfg = config.load(args.config)
+    existing = {int(src["id"]): float(src.get("weight", 1.0))
+                for src in (cfg.get("sources") or [])}
+
+    async def gather():
+        await client.start()
+        found = []
+        async for dialog in client.iter_dialogs():
+            if dialog.is_channel or dialog.is_group:
+                found.append({"id": dialog.id, "name": dialog.name or str(dialog.id)})
+        await client.disconnect()
+        return found
+
+    chats = asyncio.run(gather())
+    if not chats:
+        print("No channels or groups found on this account.")
+        return
+
+    # Suggested ones first, so the list opens on what you are probably after.
+    chats.sort(key=lambda c: (not picker.looks_like_signals(c["name"]), c["name"].lower()))
+
+    print("\nChannels and groups you are in:\n")
+    for i, chat in enumerate(chats, 1):
+        marks = []
+        if chat["id"] in existing:
+            marks.append("already added")
+        if picker.looks_like_signals(chat["name"]):
+            marks.append("looks like signals")
+        note = ("   <- " + ", ".join(marks)) if marks else ""
+        print(f"  {i:>3}. {chat['name'][:52]:<54}{note}")
+
+    print("\nType the numbers of the channels you want filtered.")
+    print("Examples:  1,4,9    or   1-6,12   or   all")
+    answer = input("Your choice: ")
+
+    picked = picker.parse_selection(answer, len(chats))
+    if not picked:
+        print("Nothing selected, config.yaml left unchanged.")
+        return
+
+    entries = [{"id": chats[i]["id"], "name": chats[i]["name"],
+                "weight": existing.get(chats[i]["id"], 1.0)} for i in picked]
+    path, backup = picker.write_sources(entries)
+
+    print(f"\nWrote {len(entries)} channel(s) to {path}")
+    print(f"(previous version kept as {backup.name})\n")
+    for entry in entries:
+        muted = "  [muted, weight 0.0]" if entry["weight"] == 0.0 else ""
+        print(f"  {entry['name'][:52]}{muted}")
+    print("\nRestart the agent for this to take effect:")
+    print("  - using the Desktop shortcut: close the agent window and open it again")
+    print("  - using the background task:  Restart-ScheduledTask -TaskName sigfilter-watch")
+
+
 def cmd_watch(args):
     from . import listener
 
@@ -165,6 +224,7 @@ def main(argv=None):
         help="also print the session string, needed only for headless/CI runs",
     )
     sub.add_parser("channels", help="list your chats and their ids")
+    sub.add_parser("pick", help="choose which channels to filter and write config.yaml")
     sub.add_parser("watch", help="run forever, forward signals as they arrive")
 
     poll_parser = sub.add_parser("poll", help="process new messages once, then exit (for cron)")
@@ -188,7 +248,7 @@ def main(argv=None):
     handlers = {
         "login": cmd_login, "channels": cmd_channels, "watch": cmd_watch,
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
-        "dashboard": cmd_dashboard,
+        "dashboard": cmd_dashboard, "pick": cmd_pick,
     }
     handlers[args.cmd](args)
 

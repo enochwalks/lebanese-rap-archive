@@ -80,9 +80,14 @@ Then, one at a time:
 
 ```powershell
 .\run.ps1 login       # one-time Telegram login
-.\run.ps1 channels    # lists your channels + their ids -> paste into config.yaml
+.\run.ps1 pick        # numbered list of your chats -> choose -> writes config.yaml
 .\run.ps1 watch       # starts filtering
 ```
+
+`pick` is the safe way to choose channels: it rewrites only the `sources:` block
+and keeps a `.bak`, so a mistyped space cannot break the rest of the file. Run it
+again any time you join or leave a channel. `channels` still prints the raw ids if
+you would rather edit the file yourself.
 
 `run.ps1` works for every command: `stats`, `recent`, `poll`, `test`.
 
