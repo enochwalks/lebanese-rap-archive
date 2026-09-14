@@ -115,6 +115,35 @@ GitHub Secrets, use a **separate Telegram account** that is only a member of the
 signal channels — never your main one. Telegram may also challenge logins coming
 from datacenter IPs.
 
+## Watching it work
+
+```powershell
+.\run.ps1 dashboard      # opens http://127.0.0.1:8765 in your browser
+```
+
+A live page showing whether the listener is actually alive (it writes a heartbeat
+every 30 seconds, so a quiet market and a dead process don't look the same), what
+it has read today, the last signal that passed with its score broken into the six
+components, every message it rejected and why, and the quality table for every
+channel.
+
+It binds to 127.0.0.1 only and reads `signals.db` directly. The page cannot be
+hosted anywhere else, by design: your trading history and channel list would have
+to leave the machine first.
+
+Run it alongside `watch` in a second PowerShell window, or leave the scheduled
+task running and just open the dashboard when you want to look.
+
+## Running unattended
+
+```powershell
+.\install-task.ps1           # start automatically at every Windows login
+.\install-task.ps1 -Remove   # undo that
+```
+
+Runs the listener in the background under `pythonw` with no console window and
+automatic restart. It only runs while you are logged in.
+
 ## Tuning it
 
 ```bash

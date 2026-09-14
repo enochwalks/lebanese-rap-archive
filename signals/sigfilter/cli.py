@@ -68,6 +68,13 @@ def cmd_poll(args):
     asyncio.run(listener.poll(cfg, limit=args.limit))
 
 
+def cmd_dashboard(args):
+    from . import dashboard
+
+    cfg = config.load(args.config)
+    dashboard.serve(cfg, port=args.port, open_browser=not args.no_browser)
+
+
 def cmd_stats(args):
     cfg = config.load(args.config)
     with db.connect() as conn:
@@ -165,6 +172,10 @@ def main(argv=None):
 
     sub.add_parser("stats", help="per-channel hit rate and trust")
 
+    dash_parser = sub.add_parser("dashboard", help="open the live dashboard in your browser")
+    dash_parser.add_argument("--port", type=int, default=8765)
+    dash_parser.add_argument("--no-browser", action="store_true")
+
     recent_parser = sub.add_parser("recent", help="last scored signals and why they passed or failed")
     recent_parser.add_argument("--limit", type=int, default=20)
 
@@ -177,6 +188,7 @@ def main(argv=None):
     handlers = {
         "login": cmd_login, "channels": cmd_channels, "watch": cmd_watch,
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
+        "dashboard": cmd_dashboard,
     }
     handlers[args.cmd](args)
 

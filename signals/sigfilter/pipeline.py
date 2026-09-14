@@ -2,6 +2,7 @@
 
 import hashlib
 import time
+from datetime import datetime, timezone
 
 from . import consensus, db, parse, promo, score
 from .config import source_map
@@ -27,6 +28,8 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
     # Count the whole feed, not just the tradeable part: the promo ratio is what
     # tells you whether this is a signal channel or a funnel.
     db.bump_counter(conn, f"msgs:{channel_id}")
+    today = datetime.fromtimestamp(now, timezone.utc).strftime("%Y%m%d")
+    db.bump_counter(conn, f"seen:{today}")
     if promo.is_promo(text):
         db.bump_counter(conn, f"promo:{channel_id}")
 
@@ -60,7 +63,7 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
 
     signal_id = db.record(
         conn, sig, channel_id, channel["name"], msg_id, ts,
-        total, verdict, reasons or list(breakdown.keys()), fingerprint(sig),
+        total, verdict, reasons, fingerprint(sig), breakdown=breakdown,
     )
 
     return {

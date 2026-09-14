@@ -71,9 +71,21 @@ async def watch(cfg):
             except Exception as exc:                      # one bad message must not kill the listener
                 print(f"[error  ] {type(exc).__name__}: {exc}")
 
+    asyncio.create_task(_heartbeat_loop())
     if cfg["outcomes"]["enabled"]:
         asyncio.create_task(_outcome_loop(cfg))
     await client.run_until_disconnected()
+
+
+async def _heartbeat_loop():
+    """Proof of life. Without it, a quiet market and a dead process look identical."""
+    while True:
+        try:
+            with db.connect() as conn:
+                db.set_state(conn, "heartbeat", int(time.time()))
+        except Exception:
+            pass
+        await asyncio.sleep(30)
 
 
 async def _outcome_loop(cfg):

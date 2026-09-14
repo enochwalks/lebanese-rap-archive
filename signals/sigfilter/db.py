@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS signals (
     score         REAL,
     verdict       TEXT,
     reasons       TEXT,
+    breakdown     TEXT,
     fingerprint   TEXT,
     text          TEXT,
     forwarded     INTEGER DEFAULT 0,
@@ -43,12 +44,21 @@ CREATE TABLE IF NOT EXISTS state (
 """
 
 
+def _migrate(conn):
+    """Add columns introduced after a database was first created."""
+    existing = {row["name"] for row in conn.execute("PRAGMA table_info(signals)")}
+    for column, ddl in (("breakdown", "TEXT"),):
+        if column not in existing:
+            conn.execute(f"ALTER TABLE signals ADD COLUMN {column} {ddl}")
+
+
 @contextmanager
 def connect(path=None):
     conn = sqlite3.connect(path or db_path(), timeout=30)
     conn.row_factory = sqlite3.Row
     try:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         yield conn
         conn.commit()
     finally:
@@ -91,16 +101,18 @@ def already_seen(conn, channel_id, msg_id):
     return row is not None
 
 
-def record(conn, sig, channel_id, channel_name, msg_id, ts, score, verdict, reasons, fingerprint):
+def record(conn, sig, channel_id, channel_name, msg_id, ts, score, verdict, reasons,
+           fingerprint, breakdown=None):
     conn.execute(
         """INSERT OR IGNORE INTO signals
            (channel_id, channel_name, msg_id, ts, symbol, side, entry, sl, tp1, tps,
-            leverage, asset_class, rr, score, verdict, reasons, fingerprint, text)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            leverage, asset_class, rr, score, verdict, reasons, breakdown, fingerprint, text)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             channel_id, channel_name, msg_id, ts, sig.symbol, sig.side, sig.entry, sig.sl,
             sig.tp1, json.dumps(sig.tps), sig.leverage, sig.asset_class, sig.risk_reward(),
-            score, verdict, json.dumps(reasons), fingerprint, (sig.raw or "")[:4000],
+            score, verdict, json.dumps(reasons), json.dumps(breakdown or {}),
+            fingerprint, (sig.raw or "")[:4000],
         ),
     )
     return conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]
