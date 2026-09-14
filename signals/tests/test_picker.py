@@ -76,3 +76,66 @@ class TestHints(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNonAsciiRoundTrip(unittest.TestCase):
+    """A config naming channels in Arabic or with emoji must survive a write and
+    a read. Windows opens files in the locale codepage unless told otherwise, so
+    this is the exact path that crashed the listener on a real machine."""
+
+    def setUp(self):
+        self.dir = Path(tempfile.mkdtemp())
+        self.path = self.dir / "config.yaml"
+        self.path.write_text(CONFIG, encoding="utf-8")
+
+    def test_arabic_and_emoji_channel_names_round_trip(self):
+        import os
+        from sigfilter import config
+
+        entries = [
+            {"id": -100111, "name": "قناة الميادين | عاجل", "weight": 1.0},
+            {"id": -100222, "name": "United Kings™ Signals! 👑", "weight": 1.0},
+            {"id": -100333, "name": "GOLD SNIPERS FOREX", "weight": 0.0},
+        ]
+        picker.write_sources(entries, path=self.path)
+
+        os.environ["SIGFILTER_CONFIG"] = str(self.path)
+        try:
+            loaded = config.load(self.path)
+        finally:
+            os.environ.pop("SIGFILTER_CONFIG", None)
+
+        names = [src["name"] for src in loaded["sources"]]
+        self.assertIn("قناة الميادين | عاجل", names)
+        self.assertIn("United Kings™ Signals! 👑", names)
+        self.assertEqual(loaded["gate"]["min_score"], 70)
+
+    def test_loads_under_a_legacy_locale(self):
+        """The real failure: Windows opens files in the locale codepage, so a
+        config naming a channel in Arabic raised UnicodeDecodeError and took the
+        listener down at startup. Simulated here by disabling UTF-8 mode in a
+        subprocess - on a UTF-8 host the bug is invisible without it."""
+        import os
+        import subprocess
+        import sys
+
+        picker.write_sources(
+            [{"id": -100111, "name": "قناة الميادين | عاجل", "weight": 1.0}],
+            path=self.path)
+
+        snippet = (
+            "import sys; sys.path.insert(0, %r)\n"
+            "from sigfilter import config\n"
+            "cfg = config.load(%r)\n"
+            "assert cfg['sources'][0]['id'] == -100111\n"
+            "print('ok')\n"
+        ) % (str(Path(__file__).resolve().parent.parent), str(self.path))
+
+        env = dict(os.environ, PYTHONUTF8="0", LC_ALL="C", LANG="C")
+        result = subprocess.run([sys.executable, "-c", snippet], env=env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_file_is_written_as_utf8(self):
+        picker.write_sources([{"id": -1, "name": "ذهب", "weight": 1.0}], path=self.path)
+        self.assertIn("ذهب", self.path.read_bytes().decode("utf-8"))

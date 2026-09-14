@@ -50,7 +50,7 @@ def load_env(path=None):
     env_path = Path(path or ROOT / ".env")
     if not env_path.exists():
         return
-    for line in env_path.read_text().splitlines():
+    for line in env_path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -61,7 +61,9 @@ def load_env(path=None):
 def load(path=None):
     load_env()
     cfg_path = Path(path or os.environ.get("SIGFILTER_CONFIG") or ROOT / "config.yaml")
-    raw = yaml.safe_load(cfg_path.read_text()) if cfg_path.exists() else {}
+    # Always UTF-8: channel names carry Arabic and emoji, and Windows would
+    # otherwise open this with the locale codepage and fail to decode them.
+    raw = yaml.safe_load(cfg_path.read_text(encoding="utf-8")) if cfg_path.exists() else {}
     cfg = _merge(DEFAULTS, raw)
     cfg["_path"] = str(cfg_path)
     return cfg

@@ -213,7 +213,19 @@ def cmd_test(args):
         print("\n--- would send ---\n" + deliver.format_signal(result))
 
 
+def _use_utf8_console():
+    """Windows consoles default to a legacy codepage that cannot print a channel
+    named in Arabic or carrying an emoji. Printing one would otherwise abort the
+    listener mid-run."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
+
 def main(argv=None):
+    _use_utf8_console()
     parser = argparse.ArgumentParser(prog="sigfilter", description=__doc__)
     parser.add_argument("--config", help="path to config.yaml")
     sub = parser.add_subparsers(dest="cmd", required=True)
