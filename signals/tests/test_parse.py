@@ -88,3 +88,25 @@ class TestParse(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestLadderedTargets(unittest.TestCase):
+    """Gold/forex channels post a ladder of targets; risk/reward is measured to
+    the furthest (the trade's real objective), while tp1 stays the first partial
+    for grading."""
+
+    def test_gold_ladder_uses_final_target_for_rr(self):
+        sig = parse("Gold Sell now 4295-4300\nTP1: 4290\nTP2: 4285\nTP3: 4280\nTP4: 4275\nSL: 4307")
+        self.assertEqual(sig.tp1, 4290.0)          # nearest, for grading
+        self.assertEqual(sig.final_tp, 4275.0)     # furthest, for risk/reward
+        self.assertGreater(sig.risk_reward(), 2.0)
+
+    def test_repeated_tp_label_format(self):
+        sig = parse("Gold sell now 4284 - 4288\nSL: 4293\nTP: 4282\nTP: 4280\nTP: 4278\nTP: 4276\nTP: 4274\nTP: open")
+        self.assertEqual(sorted(sig.tps), [4274.0, 4276.0, 4278.0, 4280.0, 4282.0])
+        self.assertAlmostEqual(sig.risk_reward(), 1.71, places=1)
+
+    def test_single_target_unchanged(self):
+        sig = parse("GOLD BUY 2340 sl 2330 tp 2360")
+        self.assertEqual(sig.final_tp, sig.tp1)
+        self.assertAlmostEqual(sig.risk_reward(), 2.0)

@@ -82,18 +82,32 @@ class Signal:
     def tp1(self):
         if not self.tps:
             return None
-        # Nearest target to entry, not whichever the channel listed first.
+        # Nearest target to entry — the first partial exit, and what grading
+        # checks ("did the trade reach first target before the stop?").
         ref = self.entry
         if ref is None:
             return self.tps[0]
         return min(self.tps, key=lambda t: abs(t - ref))
 
+    @property
+    def final_tp(self):
+        """Furthest target from entry — the trade's full objective. Gold/forex
+        channels post a ladder (TP1 close, TP4/TP5 far); the trade is designed to
+        run toward the last one, so risk/reward is measured against it, not the
+        first partial."""
+        if not self.tps:
+            return None
+        ref = self.entry
+        if ref is None:
+            return self.tps[-1]
+        return max(self.tps, key=lambda t: abs(t - ref))
+
     def risk_reward(self):
-        entry, tp1, sl = self.entry, self.tp1, self.sl
-        if entry is None or tp1 is None or sl is None:
+        entry, target, sl = self.entry, self.final_tp, self.sl
+        if entry is None or target is None or sl is None:
             return None
         risk = abs(entry - sl)
-        reward = abs(tp1 - entry)
+        reward = abs(target - entry)
         if risk <= 0:
             return None
         return reward / risk

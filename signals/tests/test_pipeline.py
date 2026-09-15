@@ -39,7 +39,9 @@ class TestPipeline(unittest.TestCase):
     def test_independent_agreement_raises_score(self):
         with db.connect(self.db) as conn:
             first = self._run(conn, -100, CLEAN, 1, offset=300)
-            second = self._run(conn, -200, "BTCUSDT buy at 62050, target 64000, stop 61100", 2)
+            # Same instrument/direction and a comparable target, so the only
+            # meaningful difference from the first is the cross-channel agreement.
+            second = self._run(conn, -200, "BTCUSDT buy at 62000, target 66000, stop 61000", 2)
         self.assertGreater(second["score"], first["score"])
         self.assertEqual(second["consensus"]["agreeing_channels"], 1)
 
