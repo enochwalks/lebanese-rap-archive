@@ -127,6 +127,16 @@ def cmd_poll(args):
     asyncio.run(listener.poll(cfg, limit=args.limit))
 
 
+def cmd_grade(args):
+    """Grade every past signal we now have a price source for."""
+    from . import outcomes
+
+    cfg = config.load(args.config)
+    print("Grading pending signals against real prices (crypto, gold, forex)...")
+    graded = outcomes.grade_pending(cfg)
+    print(f"Graded {graded} signal(s). Run  .\\run.ps1 stats  to see the result.")
+
+
 def cmd_backfill(args):
     from . import listener
 
@@ -256,6 +266,8 @@ def main(argv=None):
     backfill_parser.add_argument("--limit", type=int, default=300,
                                  help="max past messages per channel")
 
+    sub.add_parser("grade", help="grade stored signals against real prices")
+
     sub.add_parser("stats", help="per-channel hit rate and trust")
 
     dash_parser = sub.add_parser("dashboard", help="open the live dashboard in your browser")
@@ -275,6 +287,7 @@ def main(argv=None):
         "login": cmd_login, "channels": cmd_channels, "watch": cmd_watch,
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
         "dashboard": cmd_dashboard, "pick": cmd_pick, "backfill": cmd_backfill,
+        "grade": cmd_grade,
     }
     handlers[args.cmd](args)
 

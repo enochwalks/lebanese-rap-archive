@@ -130,8 +130,9 @@ free evidence about channel quality:
 .\run.ps1 backfill        # reads recent history, grades it, builds trust
 ```
 
-It scores every past post as if it were fresh (never forwarding any), grades the
-crypto ones against what Binance actually did, and updates each channel's record.
+It scores every past post as if it were fresh (never forwarding any), grades them
+against what the price actually did - crypto on Binance, gold/silver/forex/indices
+on Yahoo Finance, both free and keyless - and updates each channel's record.
 Afterwards `stats` and the dashboard show real win/loss numbers immediately
 instead of after weeks of waiting. Run it once, after `pick`.
 

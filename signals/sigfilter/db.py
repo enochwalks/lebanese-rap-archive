@@ -155,11 +155,14 @@ def channel_record(conn, channel_id):
 
 def pending_outcomes(conn, horizon_hours, now=None):
     now = now or int(time.time())
+    # Every asset class we have a free price source for - not crypto alone, or the
+    # gold and forex channels that dominate most feeds would never be graded.
     return conn.execute(
         """SELECT * FROM signals
             WHERE outcome IS NULL AND entry IS NOT NULL AND sl IS NOT NULL
-              AND tp1 IS NOT NULL AND asset_class = 'crypto'
-              AND ts <= ? ORDER BY ts ASC LIMIT 200""",
+              AND tp1 IS NOT NULL
+              AND asset_class IN ('crypto','metal','forex','index')
+              AND ts <= ? ORDER BY ts ASC LIMIT 400""",
         (now - 300,),
     ).fetchall()
 
