@@ -159,6 +159,57 @@ def cmd_grade(args):
     print("\nThen:  .\\run.ps1 stats")
 
 
+def cmd_testsend(args):
+    """Send one sample signal through the real delivery path - Telegram, and
+    ntfy push if configured - so you can confirm both actually arrive."""
+    import asyncio
+    import os
+
+    from . import deliver, listener, parse
+
+    cfg = config.load(args.config)
+    sig = parse.parse("XAUUSD SELL\nEntry: 3811\nTP1: 3792\nTP2: 3774\nSL: 3822")
+    result = {
+        "signal": sig, "score": 74.0, "channel": "sigfilter self-test",
+        "trust": 0.49, "record": (29, 17),
+        "consensus": {"agreeing_channels": 1, "conflicting_channels": 0,
+                      "duplicate_of": None, "window_minutes": 45},
+        "breakdown": {"channel_trust": {"points": 15.0, "weight": 30}},
+    }
+    body = "[TEST] " + deliver.format_signal(result)
+
+    async def send_tg():
+        client = listener.build_client()
+        await client.start()
+        await deliver.send_telegram(client, cfg["destination"], body)
+        await client.disconnect()
+
+    print("Sending a test signal to Telegram (%r)..." % cfg["destination"])
+    try:
+        asyncio.run(send_tg())
+        print("  Telegram: sent. Open Telegram -> Saved Messages to see it.")
+    except Exception as exc:
+        print(f"  Telegram: FAILED - {type(exc).__name__}: {exc}")
+
+    topic = os.environ.get("NTFY_TOPIC")
+    if not topic:
+        import secrets
+        suggestion = "sigfilter-" + secrets.token_hex(4)
+        print("\n  ntfy push: not set up yet.")
+        print("  To get signals on your phone free:")
+        print("   1. Install the 'ntfy' app (Play Store / App Store).")
+        print(f"   2. In the app, subscribe to a secret topic, e.g.  {suggestion}")
+        print("   3. Add this line to your .env file (in the signals folder):")
+        print(f"        NTFY_TOPIC={suggestion}")
+        print("   4. Run this test again.")
+        return
+    print(f"\nSending a test push to ntfy topic '{topic}'...")
+    if deliver.push_ntfy(body, topic=topic, title="sigfilter test"):
+        print("  ntfy: sent. Check your phone (or https://ntfy.sh/%s)." % topic)
+    else:
+        print("  ntfy: FAILED - check the topic and your connection.")
+
+
 def cmd_clean(args):
     """Remove stored signals whose symbol no longer parses as a real instrument -
     junk left by an earlier, looser parser (e.g. FUTURESUSDT from the word
@@ -375,6 +426,8 @@ def main(argv=None):
     probe_parser = sub.add_parser("probe", help="test the price feed for one symbol")
     probe_parser.add_argument("symbol", help="e.g. XAUUSD, BTCUSDT, EURUSD")
 
+    sub.add_parser("testsend", help="send a sample signal to Telegram and ntfy to test delivery")
+
     sub.add_parser("clean", help="remove mis-parsed junk symbols from the database")
 
     set_parser = sub.add_parser("set", help="change a gate setting, e.g. set min_score 55")
@@ -402,6 +455,7 @@ def main(argv=None):
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
         "dashboard": cmd_dashboard, "pick": cmd_pick, "backfill": cmd_backfill,
         "grade": cmd_grade, "probe": cmd_probe, "set": cmd_set, "clean": cmd_clean,
+        "testsend": cmd_testsend,
     }
     handlers[args.cmd](args)
 
