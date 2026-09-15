@@ -14,7 +14,7 @@ import time
 from telethon import TelegramClient, events
 from telethon.sessions import StringSession
 
-from . import config, db, deliver, pipeline
+from . import config, db, deliver, pipeline, singleton
 
 
 def build_client():
@@ -52,9 +52,31 @@ async def _handle(client, conn, cfg, channel_id, msg_id, text, ts):
     return result
 
 
+# Held for the life of the process so a second agent can detect the first.
+_LOCK_HANDLE = None
+
+
 async def watch(cfg):
+    global _LOCK_HANDLE
+    try:
+        _LOCK_HANDLE = singleton.acquire(str(config.ROOT / "sigfilter.lock"))
+    except singleton.AlreadyRunning:
+        raise SystemExit(
+            "Another copy of the agent is already running - only one can read "
+            "your account at a time.\n"
+            "Close the other agent window, or stop the background task with:\n"
+            "  Stop-ScheduledTask -TaskName sigfilter-watch\n"
+            "then start this one again.")
+
     client = build_client()
-    await client.start()
+    try:
+        await client.start()
+    except Exception as exc:
+        if "database is locked" in str(exc):
+            raise SystemExit(
+                "Your Telegram session is in use by another copy of the agent. "
+                "Close the other one and try again.")
+        raise
     sources = config.source_map(cfg)
     if not sources:
         raise SystemExit("No sources configured. Run: python -m sigfilter.cli channels")
