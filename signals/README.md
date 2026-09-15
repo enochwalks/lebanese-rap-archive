@@ -120,6 +120,21 @@ GitHub Secrets, use a **separate Telegram account** that is only a member of the
 signal channels — never your main one. Telegram may also challenge logins coming
 from datacenter IPs.
 
+## Using the backlog
+
+The live agent only sees messages that arrive after it starts - it does not read
+old history, and it shouldn't forward stale entries to trade. But the backlog is
+free evidence about channel quality:
+
+```powershell
+.\run.ps1 backfill        # reads recent history, grades it, builds trust
+```
+
+It scores every past post as if it were fresh (never forwarding any), grades the
+crypto ones against what Binance actually did, and updates each channel's record.
+Afterwards `stats` and the dashboard show real win/loss numbers immediately
+instead of after weeks of waiting. Run it once, after `pick`.
+
 ## Watching it work
 
 ```powershell

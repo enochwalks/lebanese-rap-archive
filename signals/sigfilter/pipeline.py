@@ -16,8 +16,14 @@ def fingerprint(sig):
     return hashlib.sha1("|".join(parts).encode()).hexdigest()[:16]
 
 
-def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
-    """Evaluate one message. Returns a result dict; caller handles delivery."""
+def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None, historical=False):
+    """Evaluate one message. Returns a result dict; caller handles delivery.
+
+    historical=True backfills past posts: they are scored on quality as if fresh
+    (a week-old entry was fresh when it was posted), never forwarded, and never
+    counted against the daily cap - the point is to grade outcomes and build
+    channel trust from the backlog, not to trade stale signals.
+    """
     now = now or int(time.time())
     sources = source_map(cfg)
     channel = sources.get(channel_id, {"name": str(channel_id), "weight": 1.0})
@@ -28,8 +34,8 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
     # Count the whole feed, not just the tradeable part: the promo ratio is what
     # tells you whether this is a signal channel or a funnel.
     db.bump_counter(conn, f"msgs:{channel_id}")
-    today = datetime.fromtimestamp(now, timezone.utc).strftime("%Y%m%d")
-    db.bump_counter(conn, f"seen:{today}")
+    day = datetime.fromtimestamp(ts, timezone.utc).strftime("%Y%m%d")
+    db.bump_counter(conn, f"seen:{day}")
     if promo.is_promo(text):
         db.bump_counter(conn, f"promo:{channel_id}")
 
@@ -37,7 +43,9 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
     if not sig:
         return {"status": "not_a_signal"}
 
-    age = max(0, now - ts)
+    # For a backfill, use the post-time freshness (0) so the age gate never fires;
+    # the real ts is still stored, so outcome grading uses the correct window.
+    age = 0 if historical else max(0, now - ts)
     info = consensus.evaluate(
         conn, sig, channel_id, now=now,
         window_minutes=cfg["consensus"]["window_minutes"],
@@ -57,7 +65,7 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
     total, breakdown = score.score_signal(
         sig, trust=trust, consensus_info=info, age_seconds=age, cfg=cfg
     )
-    forwarded = db.forwarded_today(conn, now)
+    forwarded = 0 if historical else db.forwarded_today(conn, now)
     reasons = score.gate_reasons(sig, total, info, age, cfg, forwarded_today=forwarded)
     verdict = "ACCEPT" if not reasons else "REJECT"
 
@@ -79,4 +87,5 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None):
         "trust": round(trust, 3),
         "record": (wins, losses),
         "promo": (promo_count, msg_count, round(promo_penalty, 2)),
+        "historical": historical,
     }

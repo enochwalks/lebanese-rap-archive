@@ -127,6 +127,15 @@ def cmd_poll(args):
     asyncio.run(listener.poll(cfg, limit=args.limit))
 
 
+def cmd_backfill(args):
+    from . import listener
+
+    cfg = config.load(args.config)
+    print(f"Reading up to {args.limit} past messages per channel. This is a "
+          "one-off; nothing is forwarded.\n")
+    asyncio.run(listener.backfill(cfg, limit=args.limit))
+
+
 def cmd_dashboard(args):
     from . import dashboard
 
@@ -242,6 +251,11 @@ def main(argv=None):
     poll_parser = sub.add_parser("poll", help="process new messages once, then exit (for cron)")
     poll_parser.add_argument("--limit", type=int, default=40, help="max messages per channel")
 
+    backfill_parser = sub.add_parser(
+        "backfill", help="score past history to bootstrap channel trust (nothing forwarded)")
+    backfill_parser.add_argument("--limit", type=int, default=300,
+                                 help="max past messages per channel")
+
     sub.add_parser("stats", help="per-channel hit rate and trust")
 
     dash_parser = sub.add_parser("dashboard", help="open the live dashboard in your browser")
@@ -260,7 +274,7 @@ def main(argv=None):
     handlers = {
         "login": cmd_login, "channels": cmd_channels, "watch": cmd_watch,
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
-        "dashboard": cmd_dashboard, "pick": cmd_pick,
+        "dashboard": cmd_dashboard, "pick": cmd_pick, "backfill": cmd_backfill,
     }
     handlers[args.cmd](args)
 

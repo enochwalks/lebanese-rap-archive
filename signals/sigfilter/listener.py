@@ -123,6 +123,42 @@ async def _outcome_loop(cfg):
             print(f"[error  ] grading: {type(exc).__name__}: {exc}")
 
 
+async def backfill(cfg, limit=300):
+    """Read recent history from every channel, score it as historical (never
+    forwarded), then grade the crypto signals against real prices so channel
+    trust reflects the backlog instead of starting from a blank slate."""
+    client = build_client()
+    await client.start()
+    sources = config.source_map(cfg)
+    now = int(time.time())
+    scored = 0
+
+    with db.connect() as conn:
+        for channel_id in sources:
+            name = sources[channel_id]["name"]
+            batch = []
+            async for msg in client.iter_messages(channel_id, limit=limit):
+                if msg.message and msg.message.strip():
+                    batch.append(msg)
+            for msg in reversed(batch):          # oldest first for consensus
+                result = pipeline.process(
+                    conn, cfg, channel_id=channel_id, msg_id=msg.id,
+                    text=msg.message, ts=int(msg.date.timestamp()),
+                    now=now, historical=True)
+                if result["status"] == "scored":
+                    scored += 1
+            conn.commit()
+            print(f"  {name}: read {len(batch)} message(s)")
+
+    print(f"\nScored {scored} past signal(s). Grading outcomes against real prices...")
+    if cfg["outcomes"]["enabled"]:
+        from . import outcomes
+        graded = outcomes.grade_pending(cfg)
+        print(f"Graded {graded} crypto signal(s).")
+    print("\nRun  python -m sigfilter.cli stats  to see which channels actually win.")
+    await client.disconnect()
+
+
 async def poll(cfg, limit=40):
     """Read what we missed since the last run, then exit. Cron-friendly."""
     client = build_client()

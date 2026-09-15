@@ -138,3 +138,53 @@ class TestPromoPenalty(unittest.TestCase):
         self.assertLess(funnel["promo"][2], 1.0)
         self.assertEqual(clean["promo"][2], 1.0)
         self.assertLess(funnel["trust"], clean["trust"])
+
+
+class TestHistoricalBackfill(unittest.TestCase):
+    """Backfill scores old posts on quality and never forwards them."""
+
+    def setUp(self):
+        self.tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
+        self.now = int(time.time())
+
+    def test_stale_signal_rejected_live_but_scored_historically(self):
+        old_ts = self.now - 3 * 86400        # three days old
+        with db.connect(self.tmp) as conn:
+            live = pipeline.process(conn, CFG, channel_id=-100, msg_id=1,
+                                    text=CLEAN, ts=old_ts, now=self.now)
+            hist = pipeline.process(conn, CFG, channel_id=-100, msg_id=2,
+                                    text=CLEAN, ts=old_ts, now=self.now, historical=True)
+        # Live: rejected as stale. Historical: age is not a reason.
+        self.assertTrue(any("stale" in r for r in live["reasons"]))
+        self.assertFalse(any("stale" in r for r in hist["reasons"]))
+
+    def test_backfill_does_not_touch_daily_cap(self):
+        capped = dict(CFG)
+        capped["gate"] = dict(CFG["gate"], daily_cap=1, min_score=0)
+        with db.connect(self.tmp) as conn:
+            for i in range(5):
+                r = pipeline.process(conn, capped, channel_id=-100, msg_id=100 + i,
+                                     text=CLEAN, ts=self.now - 86400, now=self.now,
+                                     historical=True)
+                self.assertFalse(any("daily cap" in reason for reason in r["reasons"]))
+
+    def test_historical_flag_is_reported(self):
+        with db.connect(self.tmp) as conn:
+            r = pipeline.process(conn, CFG, channel_id=-100, msg_id=1,
+                                 text=CLEAN, ts=self.now - 86400, now=self.now,
+                                 historical=True)
+        self.assertTrue(r["historical"])
+
+    def test_backfilled_messages_count_on_their_own_day_not_today(self):
+        from sigfilter.dashboard import collect
+        with db.connect(self.tmp) as conn:
+            pipeline.process(conn, CFG, channel_id=-100, msg_id=1, text=CLEAN,
+                             ts=self.now - 5 * 86400, now=self.now, historical=True)
+        dashboard_db = __import__("sigfilter.dashboard", fromlist=["db"]).db
+        orig = dashboard_db.db_path
+        dashboard_db.db_path = lambda: self.tmp
+        try:
+            state = collect(CFG, now=self.now)
+        finally:
+            dashboard_db.db_path = orig
+        self.assertEqual(state["today"]["messages"], 0)   # it was 5 days ago
