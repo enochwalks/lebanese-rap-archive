@@ -159,6 +159,23 @@ def cmd_grade(args):
     print("\nThen:  .\\run.ps1 stats")
 
 
+def cmd_set(args):
+    """Change one gate setting without hand-editing YAML, e.g. set min_score 55."""
+    from . import picker
+
+    try:
+        path, number = picker.set_gate_value(args.key, args.value, args.config)
+    except KeyError:
+        print(f"Unknown setting '{args.key}'. You can set: "
+              + ", ".join(picker.GATE_KEYS))
+        return
+    except ValueError:
+        print(f"'{args.value}' is not a number.")
+        return
+    print(f"Set {args.key} = {number} in {path.name}")
+    print("Restart the agent for it to take effect.")
+
+
 def cmd_probe(args):
     """Fetch prices for one symbol so you can see the source is reachable."""
     import time as _time
@@ -321,6 +338,11 @@ def main(argv=None):
     probe_parser = sub.add_parser("probe", help="test the price feed for one symbol")
     probe_parser.add_argument("symbol", help="e.g. XAUUSD, BTCUSDT, EURUSD")
 
+    set_parser = sub.add_parser("set", help="change a gate setting, e.g. set min_score 55")
+    set_parser.add_argument("key", help="min_score, min_risk_reward, max_leverage, "
+                            "max_age_minutes or daily_cap")
+    set_parser.add_argument("value")
+
     sub.add_parser("stats", help="per-channel hit rate and trust")
 
     dash_parser = sub.add_parser("dashboard", help="open the live dashboard in your browser")
@@ -340,7 +362,7 @@ def main(argv=None):
         "login": cmd_login, "channels": cmd_channels, "watch": cmd_watch,
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
         "dashboard": cmd_dashboard, "pick": cmd_pick, "backfill": cmd_backfill,
-        "grade": cmd_grade, "probe": cmd_probe,
+        "grade": cmd_grade, "probe": cmd_probe, "set": cmd_set,
     }
     handlers[args.cmd](args)
 

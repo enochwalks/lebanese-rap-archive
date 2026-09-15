@@ -70,3 +70,37 @@ def parse_selection(raw, count):
         elif token.isdigit():
             chosen.append(int(token) - 1)
     return [i for i in dict.fromkeys(chosen) if 0 <= i < count]
+
+
+import re as _re
+
+GATE_KEYS = {
+    "min_score": int, "min_risk_reward": float, "max_leverage": int,
+    "max_age_minutes": int, "daily_cap": int,
+}
+
+
+def set_gate_value(key, value, path=None):
+    """Change one numeric gate setting in config.yaml, preserving comments and
+    everything else. Raises KeyError for an unknown key, ValueError for a bad
+    number."""
+    if key not in GATE_KEYS:
+        raise KeyError(key)
+    number = GATE_KEYS[key](value)      # ValueError if not a number
+
+    cfg_path = Path(path or config.ROOT / "config.yaml")
+    if not cfg_path.exists():
+        import shutil
+        shutil.copy(config.ROOT / "config.example.yaml", cfg_path)
+    text = cfg_path.read_text(encoding="utf-8")
+
+    pattern = _re.compile(rf"^(\s*{key}\s*:\s*)([0-9.]+)(.*)$", _re.M)
+    if not pattern.search(text):
+        raise KeyError(f"{key} not found in config")
+    new_text = pattern.sub(rf"\g<1>{number}\g<3>", text, count=1)
+
+    import shutil
+    backup = cfg_path.with_suffix(".yaml.bak")
+    shutil.copy(cfg_path, backup)
+    cfg_path.write_text(new_text, encoding="utf-8")
+    return cfg_path, number

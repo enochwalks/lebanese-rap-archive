@@ -139,3 +139,39 @@ class TestNonAsciiRoundTrip(unittest.TestCase):
     def test_file_is_written_as_utf8(self):
         picker.write_sources([{"id": -1, "name": "ذهب", "weight": 1.0}], path=self.path)
         self.assertIn("ذهب", self.path.read_bytes().decode("utf-8"))
+
+
+class TestGateSetter(unittest.TestCase):
+    def setUp(self):
+        self.path = Path(tempfile.mkdtemp()) / "config.yaml"
+        self.path.write_text(
+            "sources:\n  - id: -1\n    name: \"x\"\n    weight: 1.0\n\n"
+            "gate:\n  min_score: 70          # raise for fewer, better signals\n"
+            "  min_risk_reward: 1.2\n  daily_cap: 8\n", encoding="utf-8")
+
+    def test_sets_value_and_keeps_comment(self):
+        _, number = picker.set_gate_value("min_score", "55", path=self.path)
+        self.assertEqual(number, 55)
+        text = self.path.read_text()
+        self.assertIn("min_score: 55          # raise for fewer, better signals", text)
+
+    def test_float_value(self):
+        _, number = picker.set_gate_value("min_risk_reward", "1.5", path=self.path)
+        self.assertEqual(number, 1.5)
+        import yaml
+        self.assertEqual(yaml.safe_load(self.path.read_text())["gate"]["min_risk_reward"], 1.5)
+
+    def test_unknown_key_raises(self):
+        with self.assertRaises(KeyError):
+            picker.set_gate_value("nonsense", "1", path=self.path)
+
+    def test_non_number_raises(self):
+        with self.assertRaises(ValueError):
+            picker.set_gate_value("min_score", "high", path=self.path)
+
+    def test_other_settings_untouched(self):
+        picker.set_gate_value("min_score", "55", path=self.path)
+        import yaml
+        cfg = yaml.safe_load(self.path.read_text())
+        self.assertEqual(cfg["gate"]["daily_cap"], 8)
+        self.assertEqual(cfg["sources"][0]["id"], -1)
