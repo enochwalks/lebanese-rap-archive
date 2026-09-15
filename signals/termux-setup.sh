@@ -1,7 +1,6 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # One-time setup for running sigfilter on an Android phone via Termux.
 # Run it from inside the signals folder:   bash termux-setup.sh
-set -e
 
 echo "== sigfilter phone setup =="
 echo
@@ -10,7 +9,6 @@ echo
 pkg update -y
 pkg install -y python git
 
-python -m pip install --upgrade pip
 echo "Installing dependencies (a minute or two)..."
 pip install -r requirements.txt
 
