@@ -169,13 +169,15 @@ def parse(text):
     if entry_match:
         sig.entries = [v for v in (_to_float(entry_match.group(1)), _to_float(entry_match.group(2))) if v]
     else:
-        # "XAUUSD SELL 2345" — price glued to the side word.
+        # "XAUUSD SELL 2345" or "sell now 4295 4300" — price(s) right after the
+        # side word, optionally a two-number entry zone.
         tail = flat[side_match.end(): side_match.end() + 40]
-        loose = re.search(rf"\s*(?:@|at|now\s*@?)?\s*{_NUM}", tail)
+        loose = re.search(rf"\s*(?:@|at|now\s*@?)?\s*{_NUM}(?:[\s\-–—/]+{_NUM})?", tail)
         if loose:
-            value = _to_float(loose.group(1))
-            if value:
-                sig.entries = [value]
+            values = [_to_float(loose.group(1)), _to_float(loose.group(2))]
+            values = [v for v in values if v]
+            if values:
+                sig.entries = values
                 sig.parse_notes.append("entry inferred from price next to side word")
 
     reference = sig.entries[0] if sig.entries else None
