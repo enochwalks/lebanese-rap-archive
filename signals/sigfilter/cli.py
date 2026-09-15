@@ -176,7 +176,14 @@ def cmd_testsend(args):
                       "duplicate_of": None, "window_minutes": 45},
         "breakdown": {"channel_trust": {"points": 15.0, "weight": 30}},
     }
-    body = "[TEST] " + deliver.format_signal(result)
+    banner = (
+        "\u26d4\u26d4\u26d4 THIS IS ONLY A DELIVERY TEST \u26d4\u26d4\u26d4\n"
+        "NOT A REAL SIGNAL \u2014 DO NOT TRADE THIS.\n"
+        "The numbers below are fake, just to prove the message reaches you.\n"
+        "Real signals never say [TEST] or 'sigfilter self-test'.\n"
+        "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n"
+    )
+    body = banner + "[TEST] " + deliver.format_signal(result)
 
     async def send_tg():
         client = listener.build_client()
