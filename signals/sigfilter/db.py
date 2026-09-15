@@ -167,6 +167,15 @@ def pending_outcomes(conn, horizon_hours, now=None):
     ).fetchall()
 
 
+def delete_signals(conn, signal_ids):
+    """Remove specific stored signals (used to purge mis-parsed junk symbols)."""
+    if not signal_ids:
+        return 0
+    before = conn.total_changes
+    conn.executemany("DELETE FROM signals WHERE id = ?", [(i,) for i in signal_ids])
+    return conn.total_changes - before
+
+
 def reset_soft_outcomes(conn):
     """Clear EXPIRED/NODATA back to pending so a longer horizon or a recovered
     price source can try them again. WIN/LOSS are final and never touched."""

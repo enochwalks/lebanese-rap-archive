@@ -159,6 +159,43 @@ def cmd_grade(args):
     print("\nThen:  .\\run.ps1 stats")
 
 
+def cmd_clean(args):
+    """Remove stored signals whose symbol no longer parses as a real instrument -
+    junk left by an earlier, looser parser (e.g. FUTURESUSDT from the word
+    'futures')."""
+    from . import symbols
+
+    def looks_real(sym):
+        if not sym:
+            return False
+        if symbols.asset_class(sym) in ("metal", "index", "forex"):
+            return True
+        base = sym
+        for quote in ("USDT", "USDC", "BUSD", "USD"):
+            if sym.endswith(quote):
+                base = sym[: -len(quote)]
+                break
+        return base in symbols.KNOWN_CRYPTO or base in symbols._ALIASES
+
+    junk = []
+    with db.connect() as conn:
+        rows = conn.execute("SELECT id, symbol FROM signals").fetchall()
+        for row in rows:
+            if not looks_real(row["symbol"]):
+                junk.append((row["id"], row["symbol"]))
+        if junk:
+            db.delete_signals(conn, [i for i, _ in junk])
+            conn.commit()
+    if not junk:
+        print("No junk signals found - database is clean.")
+        return
+    from collections import Counter
+    counts = Counter(sym for _, sym in junk)
+    print(f"Removed {len(junk)} mis-parsed signal(s):")
+    for sym, n in counts.most_common(15):
+        print(f"  {sym or '(empty)'}: {n}")
+
+
 def cmd_set(args):
     """Change one gate setting without hand-editing YAML, e.g. set min_score 55."""
     from . import picker
@@ -338,6 +375,8 @@ def main(argv=None):
     probe_parser = sub.add_parser("probe", help="test the price feed for one symbol")
     probe_parser.add_argument("symbol", help="e.g. XAUUSD, BTCUSDT, EURUSD")
 
+    sub.add_parser("clean", help="remove mis-parsed junk symbols from the database")
+
     set_parser = sub.add_parser("set", help="change a gate setting, e.g. set min_score 55")
     set_parser.add_argument("key", help="min_score, min_risk_reward, max_leverage, "
                             "max_age_minutes or daily_cap")
@@ -362,7 +401,7 @@ def main(argv=None):
         "login": cmd_login, "channels": cmd_channels, "watch": cmd_watch,
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
         "dashboard": cmd_dashboard, "pick": cmd_pick, "backfill": cmd_backfill,
-        "grade": cmd_grade, "probe": cmd_probe, "set": cmd_set,
+        "grade": cmd_grade, "probe": cmd_probe, "set": cmd_set, "clean": cmd_clean,
     }
     handlers[args.cmd](args)
 

@@ -27,14 +27,26 @@ _ARABIC = {
 }
 
 FIAT = {"USD", "EUR", "GBP", "JPY", "CHF", "AUD", "NZD", "CAD"}
+
+# Liquid coins that may appear bare (no $/# prefix, no quote) and still be a real
+# ticker. A word not in here and not prefixed is treated as English, not a coin -
+# this is what stops "FUTURES", "ALERT", "SIGNAL" becoming fake USDT pairs.
+KNOWN_CRYPTO = {
+    "BTC", "ETH", "SOL", "XRP", "BNB", "ADA", "DOGE", "AVAX", "DOT", "MATIC",
+    "LINK", "LTC", "BCH", "TRX", "ATOM", "XLM", "ETC", "FIL", "APT", "ARB",
+    "OP", "SUI", "INJ", "TIA", "SEI", "NEAR", "FTM", "ALGO", "AAVE", "UNI",
+    "SAND", "MANA", "AXS", "EOS", "XMR", "SHIB", "PEPE", "WIF", "BONK", "RUNE",
+    "GALA", "FLOW", "CHZ", "CRV", "LDO", "IMX", "RNDR", "FET", "GRT", "ENS",
+    "DYDX", "GMX", "JUP", "WLD", "ORDI", "STX", "TON", "ONDO", "ENA", "NOT",
+}
 QUOTES = ("USDT", "USDC", "BUSD", "USD", "PERP")
 
 # Longest-first so BTCUSDT wins over BTC when both could match.
 _TICKER_RE = re.compile(
     r"(?<![A-Za-z0-9])"
-    r"(?:#|\$)?"
+    r"([#$]?)"
     r"([A-Za-z]{2,10}[0-9]{0,3})\s*[/\-_]?\s*((?:USDT|USDC|BUSD|USD|EUR|GBP|JPY|CHF|AUD|NZD|CAD)?)"
-    r"(?:\s*(?:PERP|PERPETUAL|SPOT|FUTURES))?"
+    r"(?:\s*(?:PERP|PERPETUAL|SPOT))?"
     r"(?![A-Za-z0-9])"
 )
 
@@ -45,12 +57,25 @@ _STOPWORDS = {
     "FREE", "SIGNAL", "ZONE", "AREA", "PIPS", "LOT", "RISK", "LAYER", "USE",
     "OPEN", "CLOSE", "HIT", "RUN", "PUMP", "LEVERAGE", "CROSS", "ISOLATED",
     "MARKET", "LIMIT", "SCALP", "SWING", "IDEA", "UPDATE", "NEWS", "GOOD",
-    "LUCK", "TEAM", "ADMIN", "JOIN", "LINK", "BOT", "USDT", "USD",
+    "LUCK", "TEAM", "ADMIN", "JOIN", "BOT", "USDT", "USD",
+    "FUTURES", "FUTURE", "ALERT", "ALERTS", "RESULT", "RESULTS", "PREMIUM",
+    "DAILY", "WEEKLY", "LIVE", "TREND", "BREAK", "SUPPORT", "RESISTANCE",
+    "RESIST", "ANALYSIS", "DEPOSIT", "INVEST", "BONUS", "WITHDRAW", "ACCOUNT",
+    "CLIENT", "MEMBER", "PRICE", "WAIT", "HOLD", "WATCH", "READY", "SETUP",
+    "CHART", "FOREX", "CRYPTO", "STOCK", "STOCKS", "INDEX", "PLAN", "PLANS",
+    "DAYS", "WEEK", "CHANNEL", "GROUP", "COPY", "MANAGE", "GOLDEN", "BOOK",
+    "SLOT", "CONTACT", "PROFITS", "CAPITAL", "MONEY", "TARGETS", "REACHED",
 }
 
 
-def canonical(raw):
-    """'btc/usdt' -> 'BTCUSDT'. Returns None if it isn't a plausible instrument."""
+def canonical(raw, allow_bare=True):
+    """'btc/usdt' -> 'BTCUSDT'. Returns None if it isn't a plausible instrument.
+
+    allow_bare controls whether an unrecognised bare word (no quote, not a known
+    coin) may be assumed to be a USDT pair. extract() passes False unless the
+    word carried a $/# prefix or an explicit quote, so ordinary English words
+    like "FUTURES" or "ALERT" are not turned into fake tickers.
+    """
     if not raw:
         return None
     token = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
@@ -75,8 +100,12 @@ def canonical(raw):
         return token
     if token.endswith("USD"):
         return token
-    # Bare crypto ticker from a channel that omits the quote: assume USDT pair.
-    return base + "USDT"
+    # Bare token, no explicit quote: only a real coin, or a $/#-prefixed word.
+    if base in KNOWN_CRYPTO or base in _ALIASES:
+        return base + "USDT" if base not in _ALIASES else _ALIASES[base]
+    if allow_bare:
+        return base + "USDT"
+    return None
 
 
 def extract(text):
@@ -86,11 +115,15 @@ def extract(text):
         if word in text:
             return sym
     for match in _TICKER_RE.finditer(text):
-        base, quote = match.group(1), match.group(2)
+        prefix, base, quote = match.group(1), match.group(2), match.group(3)
         bare = re.sub(r"[0-9]+$", "", base.upper())
         if base.upper() in _STOPWORDS or (bare in _STOPWORDS and base.upper() not in _ALIASES):
             continue
-        sym = canonical(base + quote)
+        # A bare word becomes a coin only with positive evidence it is one:
+        # a $/# prefix, or an explicit quote (BTC/USDT). Otherwise it must be a
+        # known instrument, or it is treated as an English word and skipped.
+        allow_bare = bool(prefix) or bool(quote)
+        sym = canonical(base + quote, allow_bare=allow_bare)
         if sym:
             return sym
     return None
