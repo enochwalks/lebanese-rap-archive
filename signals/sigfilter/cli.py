@@ -128,13 +128,57 @@ def cmd_poll(args):
 
 
 def cmd_grade(args):
-    """Grade every past signal we now have a price source for."""
+    """Grade every past signal we have a price source for, and show the breakdown."""
     from . import outcomes
 
     cfg = config.load(args.config)
-    print("Grading pending signals against real prices (crypto, gold, forex)...")
-    graded = outcomes.grade_pending(cfg)
-    print(f"Graded {graded} signal(s). Run  .\\run.ps1 stats  to see the result.")
+    if args.horizon:
+        cfg["outcomes"]["horizon_hours"] = args.horizon
+    horizon = cfg["outcomes"]["horizon_hours"]
+
+    if args.regrade:
+        with db.connect() as conn:
+            n = db.reset_soft_outcomes(conn)
+            conn.commit()
+        print(f"Reset {n} previously expired/no-data signal(s) to try again.")
+
+    print(f"Grading against real prices, {horizon}h window (crypto, gold, forex)...\n")
+    counts = outcomes.grade_pending(cfg)
+    total = sum(counts.values())
+    print(f"Checked {total} signal(s):")
+    print(f"  WIN                             {counts.get('WIN', 0)}")
+    print(f"  LOSS                            {counts.get('LOSS', 0)}")
+    print(f"  no hit within {horizon}h (expired)     {counts.get('EXPIRED', 0)}")
+    print(f"  no price data (symbol/source)   {counts.get('NODATA', 0)}")
+    print(f"  still open                      {counts.get('PENDING', 0)}")
+    if counts.get("EXPIRED", 0) > counts.get("WIN", 0) + counts.get("LOSS", 0):
+        print("\nLots expired unresolved. Gold/forex signals often take days -")
+        print(f"try a longer window:  .\\run.ps1 grade --regrade --horizon 120")
+    if counts.get("NODATA", 0) > 0:
+        print("\nSome had no price data. Check one:  .\\run.ps1 probe XAUUSD")
+    print("\nThen:  .\\run.ps1 stats")
+
+
+def cmd_probe(args):
+    """Fetch prices for one symbol so you can see the source is reachable."""
+    import time as _time
+
+    from . import outcomes, symbols
+
+    sym = symbols.canonical(args.symbol) or args.symbol.upper()
+    asset_class = symbols.asset_class(sym)
+    now = int(_time.time())
+    candles = outcomes.candles_for(sym, asset_class, now - 3 * 86400, now)
+    source = "Binance" if asset_class == "crypto" else "Yahoo Finance"
+    print(f"{sym}  ({asset_class}, via {source})")
+    if candles:
+        print(f"  OK - {len(candles)} five-minute candles fetched")
+        print(f"  first {candles[0]}  last {candles[-1]}")
+    else:
+        ticker = outcomes._yahoo_ticker(sym, asset_class) if asset_class != "crypto" else sym
+        print(f"  NOTHING came back (ticker tried: {ticker})")
+        print("  Either the source is unreachable from here, or this instrument")
+        print("  is not listed. Crypto uses Binance; everything else uses Yahoo.")
 
 
 def cmd_backfill(args):
@@ -266,7 +310,14 @@ def main(argv=None):
     backfill_parser.add_argument("--limit", type=int, default=300,
                                  help="max past messages per channel")
 
-    sub.add_parser("grade", help="grade stored signals against real prices")
+    grade_parser = sub.add_parser("grade", help="grade stored signals against real prices")
+    grade_parser.add_argument("--horizon", type=int,
+                              help="hours to allow a signal to hit target/stop")
+    grade_parser.add_argument("--regrade", action="store_true",
+                              help="retry signals that expired or had no data")
+
+    probe_parser = sub.add_parser("probe", help="test the price feed for one symbol")
+    probe_parser.add_argument("symbol", help="e.g. XAUUSD, BTCUSDT, EURUSD")
 
     sub.add_parser("stats", help="per-channel hit rate and trust")
 
@@ -287,7 +338,7 @@ def main(argv=None):
         "login": cmd_login, "channels": cmd_channels, "watch": cmd_watch,
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
         "dashboard": cmd_dashboard, "pick": cmd_pick, "backfill": cmd_backfill,
-        "grade": cmd_grade,
+        "grade": cmd_grade, "probe": cmd_probe,
     }
     handlers[args.cmd](args)
 

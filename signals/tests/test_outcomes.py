@@ -95,3 +95,60 @@ class TestGrading(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestGradePendingBreakdown(unittest.TestCase):
+    """grade_pending reports how each signal resolved, and reset re-opens the
+    soft ones so a longer window can be tried."""
+
+    def setUp(self):
+        import tempfile
+        from sigfilter import db, config, pipeline
+        self.db = tempfile.NamedTemporaryFile(suffix=".db", delete=False).name
+        self.cfg = dict(config.DEFAULTS)
+        self.cfg["gate"] = dict(self.cfg["gate"], min_score=0)
+        self.now = int(time.time())
+        self._orig = db.db_path
+        db.db_path = lambda: self.db
+        self.db_mod = db
+        old = self.now - 5 * 86400
+        with db.connect(self.db) as conn:
+            pipeline.process(conn, self.cfg, channel_id=-1, msg_id=1,
+                             text="XAUUSD BUY entry 2340 TP 2360 SL 2330",
+                             ts=old, now=self.now, historical=True)
+            conn.commit()
+
+    def tearDown(self):
+        self.db_mod.db_path = self._orig
+
+    def test_expired_can_be_reset_and_retried(self):
+        from sigfilter import outcomes
+        # First pass: no candles -> EXPIRED (past window).
+        empty = mock.Mock(status_code=200)
+        empty.json.return_value = {"chart": {"result": []}}
+        with mock.patch.object(outcomes.requests, "get", return_value=empty):
+            counts = outcomes.grade_pending(self.cfg, now=self.now, polite_delay=0)
+        self.assertEqual(counts.get("NODATA", 0), 1)
+
+        with self.db_mod.connect(self.db) as conn:
+            reopened = self.db_mod.reset_soft_outcomes(conn)
+            conn.commit()
+        self.assertEqual(reopened, 1)
+
+        # Second pass with data -> WIN.
+        resp = mock.Mock(status_code=200)
+        resp.json.return_value = fake_yahoo([2345, 2362], [2338, 2355])
+        with mock.patch.object(outcomes.requests, "get", return_value=resp):
+            counts = outcomes.grade_pending(self.cfg, now=self.now, polite_delay=0)
+        self.assertEqual(counts.get("WIN", 0), 1)
+
+    def test_win_is_never_reset(self):
+        from sigfilter import outcomes
+        resp = mock.Mock(status_code=200)
+        resp.json.return_value = fake_yahoo([2345, 2362], [2338, 2355])
+        with mock.patch.object(outcomes.requests, "get", return_value=resp):
+            outcomes.grade_pending(self.cfg, now=self.now, polite_delay=0)
+        with self.db_mod.connect(self.db) as conn:
+            reopened = self.db_mod.reset_soft_outcomes(conn)
+            conn.commit()
+        self.assertEqual(reopened, 0)      # WIN stays put

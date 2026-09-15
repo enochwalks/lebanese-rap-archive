@@ -116,9 +116,10 @@ async def _outcome_loop(cfg):
     while True:
         await asyncio.sleep(interval)
         try:
-            graded = outcomes.grade_pending(cfg)
-            if graded:
-                print(f"[grade  ] updated {graded} signal outcome(s)")
+            counts = outcomes.grade_pending(cfg)
+            resolved = counts.get("WIN", 0) + counts.get("LOSS", 0)
+            if resolved:
+                print(f"[grade  ] {counts.get('WIN',0)} win / {counts.get('LOSS',0)} loss")
         except Exception as exc:
             print(f"[error  ] grading: {type(exc).__name__}: {exc}")
 
@@ -153,8 +154,10 @@ async def backfill(cfg, limit=300):
     print(f"\nScored {scored} past signal(s). Grading outcomes against real prices...")
     if cfg["outcomes"]["enabled"]:
         from . import outcomes
-        graded = outcomes.grade_pending(cfg)
-        print(f"Graded {graded} crypto signal(s).")
+        counts = outcomes.grade_pending(cfg)
+        wins, losses = counts.get("WIN", 0), counts.get("LOSS", 0)
+        print(f"Graded outcomes: {wins} win, {losses} loss, "
+              f"{counts.get('EXPIRED', 0)} expired, {counts.get('NODATA', 0)} no-data.")
     print("\nRun  python -m sigfilter.cli stats  to see which channels actually win.")
     await client.disconnect()
 

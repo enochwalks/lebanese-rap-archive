@@ -11,6 +11,7 @@ Both give 5-minute high/low candles, which is all the grader needs.
 """
 
 import time
+from collections import Counter
 
 import requests
 
@@ -129,16 +130,19 @@ def grade_signal(row, horizon_hours=24, now=None):
 
 
 def grade_pending(cfg, now=None, polite_delay=0.15):
+    """Grade all pending signals. Returns a Counter of outcome -> how many."""
     horizon = cfg["outcomes"]["horizon_hours"]
-    graded = 0
+    counts = Counter()
     with db.connect() as conn:
         rows = db.pending_outcomes(conn, horizon, now=now)
         for row in rows:
             verdict = grade_signal(row, horizon, now=now)
             if verdict:
                 db.set_outcome(conn, row["id"], verdict)
-                graded += 1
+                counts[verdict] += 1
+            else:
+                counts["PENDING"] += 1
             if polite_delay:
                 time.sleep(polite_delay)      # don't hammer either free endpoint
         conn.commit()
-    return graded
+    return counts

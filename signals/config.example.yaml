@@ -37,8 +37,8 @@ scoring:
   trust_prior_trades: 10 # how much evidence before a channel's record outweighs the 50% prior
 
 outcomes:
-  enabled: true          # auto-grade crypto signals against Binance klines -> updates trust
-  horizon_hours: 24
+  enabled: true          # auto-grade signals against real prices -> updates trust
+  horizon_hours: 72     # gold and forex signals often need days, not hours
   poll_minutes: 30
 
 llm_fallback:

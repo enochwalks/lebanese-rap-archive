@@ -167,6 +167,15 @@ def pending_outcomes(conn, horizon_hours, now=None):
     ).fetchall()
 
 
+def reset_soft_outcomes(conn):
+    """Clear EXPIRED/NODATA back to pending so a longer horizon or a recovered
+    price source can try them again. WIN/LOSS are final and never touched."""
+    before = conn.total_changes
+    conn.execute("UPDATE signals SET outcome = NULL, outcome_ts = NULL "
+                 "WHERE outcome IN ('EXPIRED', 'NODATA')")
+    return conn.total_changes - before
+
+
 def set_outcome(conn, signal_id, outcome, when=None):
     conn.execute(
         "UPDATE signals SET outcome = ?, outcome_ts = ? WHERE id = ?",
