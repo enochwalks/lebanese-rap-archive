@@ -107,19 +107,50 @@ python -m sigfilter.cli watch       # go
 
 ## Running it 24/7, free
 
+Pick one host - never run the agent in two places at once on the same account, or
+you get every signal twice.
+
+### On an Android phone (PC can sleep)
+
+Runs the real agent on your phone via **Termux** (a free Linux terminal app), so
+signals keep coming while the PC is off. Instant, free, always on.
+
+1. Install **Termux** from the Play Store (or F-Droid - not the old Play version).
+2. In Termux:
+   ```bash
+   pkg install -y git
+   cd ~
+   git clone -b claude/nifty-pasteur-rcppo9 https://github.com/enochwalks/lebanese-rap-archive.git
+   cd lebanese-rap-archive/signals
+   bash termux-setup.sh
+   ```
+3. Add your keys:  `nano .env`  (same `TG_API_ID`/`TG_API_HASH`, and your
+   `NTFY_TOPIC`). Save with Ctrl+O, Enter, Ctrl+X.
+4. `python -m sigfilter.cli login`  then  `python -m sigfilter.cli pick`
+5. Start it:  `bash termux-run.sh`  - leave Termux open.
+
+Two Android settings so it is not killed in the background:
+- Settings -> Apps -> Termux -> Battery -> **Unrestricted**.
+- In Termux's notification, tap **Acquire wakelock**.
+
+To keep the trust scores you built on the PC, copy `signals.db` from the PC's
+`signals` folder to the phone's `~/lebanese-rap-archive/signals/` (send it to your
+own Telegram Saved Messages, then download it in Termux). Otherwise the phone
+grades crypto itself but starts gold trust fresh (MT5 grading is PC-only).
+
+**Stop the PC agent first** so it does not double up: close the Start Signal
+Agent window, and if you installed the background task, run
+`.\install-task.ps1 -Remove` on the PC.
+
+### Other options
+
 | Option | Latency | Notes |
 |---|---|---|
-| Any always-on machine (old laptop, Raspberry Pi, free-tier VPS) running `watch` | seconds | Best. Add a `systemd` unit or `tmux` so it restarts |
-| GitHub Actions (`.github/workflows/signal-filter.yml`, `poll` mode) | 10–25 min | Truly free, zero hardware. Scheduled runs are delayed under load, and GitHub disables schedules after 60 days of repo inactivity |
+| Any always-on machine (old laptop, Pi, VPS) running `watch` | seconds | Add a `systemd` unit or `tmux` so it restarts |
+| GitHub Actions (`.github/workflows/signal-filter.yml`, `poll` mode) | 10-25 min | Truly free, zero hardware. Needs a Telegram session in the cloud - use a separate account |
 
-For scalping, minutes of latency destroys the edge — use `watch` on real hardware.
-For swing entries with a wide entry zone, `poll` is fine.
-
-**Security:** `TG_SESSION` is full access to your Telegram account. If you put it in
-GitHub Secrets, use a **separate Telegram account** that is only a member of the
-signal channels — never your main one. Telegram may also challenge logins coming
-from datacenter IPs.
-
+For scalping, minutes of latency destroys the edge - use `watch` on the phone or
+real hardware. For swing entries with a wide entry zone, `poll` is fine.
 ## Using the backlog
 
 The live agent only sees messages that arrive after it starts - it does not read
