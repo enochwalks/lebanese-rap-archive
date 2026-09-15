@@ -15,7 +15,7 @@ from collections import Counter
 
 import requests
 
-from . import db
+from . import db, mt5source
 
 BINANCE_KLINES = "https://api.binance.com/api/v3/klines"
 YAHOO_CHART = "https://query1.finance.yahoo.com/v8/finance/chart/{}"
@@ -85,13 +85,33 @@ def _yahoo_candles(ticker, start_s, end_s):
 
 
 def candles_for(symbol, asset_class, start_s, end_s):
-    """5-minute (high, low) candles from the right source, oldest first."""
+    """5-minute (high, low) candles from the best available source, oldest first.
+
+    Crypto: Binance. Everything else: the local MT5 terminal first (broker prices,
+    exact symbols), falling back to Yahoo Finance when MT5 is not installed or
+    running. Returns (candles, source_name) via candles_with_source; this wrapper
+    returns just the candles for callers that don't care.
+    """
+    return candles_with_source(symbol, asset_class, start_s, end_s)[0]
+
+
+def candles_with_source(symbol, asset_class, start_s, end_s):
     if asset_class == "crypto":
-        return _binance_candles(symbol, start_s, end_s)
+        crypto = _binance_candles(symbol, start_s, end_s)
+        if crypto:
+            return crypto, "Binance"
+        # some MT5 brokers list crypto CFDs too - try as a fallback
+    mt5 = mt5source.candles(symbol, start_s, end_s)
+    if mt5:
+        return mt5, "MT5"
+    if asset_class == "crypto":
+        return [], "Binance"
     ticker = _yahoo_ticker(symbol, asset_class)
-    if not ticker:
-        return []
-    return _yahoo_candles(ticker, start_s, end_s)
+    if ticker:
+        yahoo = _yahoo_candles(ticker, start_s, end_s)
+        if yahoo:
+            return yahoo, "Yahoo"
+    return [], "MT5/Yahoo"
 
 
 def grade_signal(row, horizon_hours=24, now=None):

@@ -131,8 +131,10 @@ free evidence about channel quality:
 ```
 
 It scores every past post as if it were fresh (never forwarding any), grades them
-against what the price actually did - crypto on Binance, gold/silver/forex/indices
-on Yahoo Finance, both free and keyless - and updates each channel's record.
+against what the price actually did, and updates each channel's record. Prices come
+from, in order: your local **MetaTrader 5** terminal (broker prices, exact symbols -
+best; just have MT5 installed and logged in), then Binance for crypto, then Yahoo
+Finance. Check the feed for any symbol with `.\run.ps1 probe XAUUSD`.
 Afterwards `stats` and the dashboard show real win/loss numbers immediately
 instead of after weeks of waiting. Run it once, after `pick`.
 

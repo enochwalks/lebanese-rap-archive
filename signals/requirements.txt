@@ -1,3 +1,7 @@
 telethon==1.36.0
 PyYAML==6.0.2
 requests==2.32.3
+
+# Optional, Windows only: real broker prices for grading gold/forex.
+# Installed by setup.ps1; ignore on other platforms.
+# MetaTrader5==5.0.45

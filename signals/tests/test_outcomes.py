@@ -152,3 +152,69 @@ class TestGradePendingBreakdown(unittest.TestCase):
             reopened = self.db_mod.reset_soft_outcomes(conn)
             conn.commit()
         self.assertEqual(reopened, 0)      # WIN stays put
+
+
+class TestSourceSelection(unittest.TestCase):
+    """MT5 is preferred for non-crypto; Yahoo is the fallback; Binance stays for
+    crypto. Verified with both sources mocked."""
+
+    def setUp(self):
+        self.now = int(time.time())
+        self.start = self.now - 3 * 86400
+
+    def test_mt5_used_for_gold_when_available(self):
+        with mock.patch.object(outcomes.mt5source, "candles",
+                               return_value=[(2350.0, 2345.0), (2360.0, 2352.0)]):
+            candles, source = outcomes.candles_with_source(
+                "XAUUSD", "metal", self.start, self.now)
+        self.assertEqual(source, "MT5")
+        self.assertEqual(len(candles), 2)
+
+    def test_falls_back_to_yahoo_when_mt5_absent(self):
+        resp = mock.Mock(status_code=200)
+        resp.json.return_value = fake_yahoo([2350, 2360], [2345, 2352])
+        with mock.patch.object(outcomes.mt5source, "candles", return_value=None), \
+             mock.patch.object(outcomes.requests, "get", return_value=resp):
+            candles, source = outcomes.candles_with_source(
+                "XAUUSD", "metal", self.start, self.now)
+        self.assertEqual(source, "Yahoo")
+        self.assertEqual(len(candles), 2)
+
+    def test_crypto_prefers_binance(self):
+        klines = [[0, "0", "63000", "61500", "0"]]
+        resp = mock.Mock(status_code=200)
+        resp.json.return_value = klines
+        with mock.patch.object(outcomes.mt5source, "candles", return_value=None), \
+             mock.patch.object(outcomes.requests, "get", return_value=resp):
+            candles, source = outcomes.candles_with_source(
+                "BTCUSDT", "crypto", self.start, self.now)
+        self.assertEqual(source, "Binance")
+
+    def test_nothing_anywhere_reports_cleanly(self):
+        with mock.patch.object(outcomes.mt5source, "candles", return_value=None):
+            resp = mock.Mock(status_code=200)
+            resp.json.return_value = {"chart": {"result": []}}
+            with mock.patch.object(outcomes.requests, "get", return_value=resp):
+                candles, source = outcomes.candles_with_source(
+                    "XAUUSD", "metal", self.start, self.now)
+        self.assertEqual(candles, [])
+
+
+class TestMt5Resolver(unittest.TestCase):
+    def test_alias_resolution(self):
+        from sigfilter import mt5source
+
+        class FakeSym:
+            def __init__(self, name): self.name = name
+
+        fake = mock.Mock()
+        fake.symbol_info.return_value = None
+        fake.symbols_get.return_value = [FakeSym("GOLD"), FakeSym("EURUSD.pro")]
+        self.assertEqual(mt5source._resolve(fake, "XAUUSD"), "GOLD")
+        self.assertEqual(mt5source._resolve(fake, "EURUSD"), "EURUSD.pro")
+
+    def test_unavailable_when_package_missing(self):
+        from sigfilter import mt5source
+        with mock.patch.object(mt5source, "_mt5", return_value=None):
+            self.assertFalse(mt5source.available())
+            self.assertIsNone(mt5source.candles("XAUUSD", 0, 1))

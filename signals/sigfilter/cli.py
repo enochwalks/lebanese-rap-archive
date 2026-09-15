@@ -165,20 +165,22 @@ def cmd_probe(args):
 
     from . import outcomes, symbols
 
+    from . import mt5source
+
     sym = symbols.canonical(args.symbol) or args.symbol.upper()
     asset_class = symbols.asset_class(sym)
     now = int(_time.time())
-    candles = outcomes.candles_for(sym, asset_class, now - 3 * 86400, now)
-    source = "Binance" if asset_class == "crypto" else "Yahoo Finance"
-    print(f"{sym}  ({asset_class}, via {source})")
+    candles, source = outcomes.candles_with_source(sym, asset_class, now - 3 * 86400, now)
+    print(f"{sym}  ({asset_class})")
+    print(f"  MetaTrader 5 available: {'yes' if mt5source.available() else 'no'}")
     if candles:
-        print(f"  OK - {len(candles)} five-minute candles fetched")
+        print(f"  OK via {source} - {len(candles)} five-minute candles")
         print(f"  first {candles[0]}  last {candles[-1]}")
     else:
-        ticker = outcomes._yahoo_ticker(sym, asset_class) if asset_class != "crypto" else sym
-        print(f"  NOTHING came back (ticker tried: {ticker})")
-        print("  Either the source is unreachable from here, or this instrument")
-        print("  is not listed. Crypto uses Binance; everything else uses Yahoo.")
+        print("  NOTHING came back from any source.")
+        if not mt5source.available():
+            print("  MT5 is not connected. Open the MetaTrader 5 terminal and log in,")
+            print("  then:  .\\run.ps1 grade --regrade")
 
 
 def cmd_backfill(args):

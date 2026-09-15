@@ -42,6 +42,16 @@ Write-Host "Installing dependencies (takes a minute)..."
 & $venvPy -m pip install --quiet -r requirements.txt
 Write-Host "Dependencies installed." -ForegroundColor Green
 
+# MetaTrader5 is Windows-only and optional - it lets the grader use your broker's
+# real gold/forex prices. A failure here is fine; the tool falls back to the web.
+Write-Host "Installing MetaTrader 5 price bridge (optional)..."
+& $venvPy -m pip install --quiet MetaTrader5 2>$null
+if ($LASTEXITCODE -eq 0) {
+    Write-Host "MetaTrader 5 bridge installed." -ForegroundColor Green
+} else {
+    Write-Host "MetaTrader 5 bridge not installed - that is OK, it is optional." -ForegroundColor DarkGray
+}
+
 # 3. Config files, only if they don't exist yet - never overwrite your edits.
 if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
