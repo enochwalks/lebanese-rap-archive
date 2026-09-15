@@ -195,9 +195,10 @@ the code just gives you the evidence to do it.
 
 ## Honest limits
 
-- **Only crypto outcomes are auto-graded.** Forex, gold and indices need a priced
-  data feed with an API key; those signals stay ungraded, so those channels keep
-  the neutral prior unless you set `weight` by hand.
+- **Crypto, gold, silver, forex and major indices are auto-graded** against free
+  price feeds (Binance and Yahoo Finance). A signal on some obscure altcoin, or an
+  instrument neither source lists, stays ungraded, so that channel keeps the
+  neutral prior until you weight it by hand.
 - **Grading is conservative.** If one 5-minute candle touches both TP and SL we
   can't tell which came first, so it's scored a loss. Assuming the good fill is
   how backtests lie to you.
