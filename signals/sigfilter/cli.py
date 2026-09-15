@@ -54,6 +54,26 @@ def cmd_channels(_args):
     asyncio.run(run())
 
 
+def cmd_follow(args):
+    """Turn auto-follow on/off. 'auto' watches every signal channel you are in
+    (and new ones automatically); 'manual' uses only the channels you picked."""
+    from . import picker
+
+    mode = (args.mode or "").lower()
+    if mode not in ("auto", "manual", "on", "off"):
+        print("Usage: follow auto   (watch all signal channels automatically)")
+        print("       follow manual (only the channels you picked)")
+        return
+    enabled = mode in ("auto", "on")
+    path = picker.set_auto_follow(enabled, args.config)
+    if enabled:
+        print(f"Auto-follow ON ({path.name}). The agent will watch every channel whose")
+        print("name looks like a signals channel, and pick up new ones you join.")
+    else:
+        print(f"Auto-follow OFF ({path.name}). Using your picked channel list.")
+    print("Restart the agent for this to take effect.")
+
+
 def cmd_pick(args):
     """List your chats, let you choose, write config.yaml for you."""
     from . import listener, picker
@@ -414,6 +434,9 @@ def main(argv=None):
     )
     sub.add_parser("channels", help="list your chats and their ids")
     sub.add_parser("pick", help="choose which channels to filter and write config.yaml")
+
+    follow_parser = sub.add_parser("follow", help="auto-follow all signal channels (follow auto|manual)")
+    follow_parser.add_argument("mode", nargs="?", help="auto or manual")
     sub.add_parser("watch", help="run forever, forward signals as they arrive")
 
     poll_parser = sub.add_parser("poll", help="process new messages once, then exit (for cron)")
@@ -461,6 +484,7 @@ def main(argv=None):
         "login": cmd_login, "channels": cmd_channels, "watch": cmd_watch,
         "poll": cmd_poll, "stats": cmd_stats, "recent": cmd_recent, "test": cmd_test,
         "dashboard": cmd_dashboard, "pick": cmd_pick, "backfill": cmd_backfill,
+        "follow": cmd_follow,
         "grade": cmd_grade, "probe": cmd_probe, "set": cmd_set, "clean": cmd_clean,
         "testsend": cmd_testsend,
     }

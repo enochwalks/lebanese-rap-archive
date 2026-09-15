@@ -16,7 +16,8 @@ def fingerprint(sig):
     return hashlib.sha1("|".join(parts).encode()).hexdigest()[:16]
 
 
-def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None, historical=False):
+def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None, historical=False,
+            channel_override=None):
     """Evaluate one message. Returns a result dict; caller handles delivery.
 
     historical=True backfills past posts: they are scored on quality as if fresh
@@ -26,7 +27,8 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None, historical=Fal
     """
     now = now or int(time.time())
     sources = source_map(cfg)
-    channel = sources.get(channel_id, {"name": str(channel_id), "weight": 1.0})
+    channel = channel_override or sources.get(
+        channel_id, {"name": str(channel_id), "weight": 1.0})
 
     if db.already_seen(conn, channel_id, msg_id):
         return {"status": "duplicate_message"}

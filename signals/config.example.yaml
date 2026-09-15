@@ -41,6 +41,14 @@ outcomes:
   horizon_hours: 72     # gold and forex signals often need days, not hours
   poll_minutes: 30
 
+# Auto-follow: watch EVERY signal-looking channel you are a member of, and pick up
+# new ones you join automatically. Turn it on with:  python -m sigfilter.cli follow auto
+auto_follow:
+  enabled: false
+  only_signal_like: true   # only channels whose name looks like signals (skips news/chat)
+  refresh_hours: 24        # re-scan your channel list this often
+  exclude: []              # channel ids to never follow, e.g. [-1001234567890]
+
 llm_fallback:
   enabled: false         # if true, unparseable messages go to Claude (costs money, not free)
   model: "claude-sonnet-5"

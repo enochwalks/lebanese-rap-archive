@@ -34,8 +34,9 @@ def build_client():
     return TelegramClient(session, int(api_id), api_hash)
 
 
-async def _handle(client, conn, cfg, channel_id, msg_id, text, ts):
-    result = pipeline.process(conn, cfg, channel_id=channel_id, msg_id=msg_id, text=text, ts=ts)
+async def _handle(client, conn, cfg, channel_id, msg_id, text, ts, channel_override=None):
+    result = pipeline.process(conn, cfg, channel_id=channel_id, msg_id=msg_id, text=text,
+                              ts=ts, channel_override=channel_override)
     if result["status"] != "scored":
         return result
     if result["verdict"] == "ACCEPT":
@@ -77,26 +78,87 @@ async def watch(cfg):
                 "Your Telegram session is in use by another copy of the agent. "
                 "Close the other one and try again.")
         raise
+    auto = bool(cfg.get("auto_follow", {}).get("enabled"))
+    exclude = {int(x) for x in cfg.get("auto_follow", {}).get("exclude", []) or []}
+    only_signal = cfg.get("auto_follow", {}).get("only_signal_like", True)
     sources = config.source_map(cfg)
-    if not sources:
-        raise SystemExit("No sources configured. Run: python -m sigfilter.cli channels")
+    followed = {}      # chat_id -> name, kept fresh in auto mode
 
-    print(f"Watching {len(sources)} channel(s). Forwarding to {cfg['destination']!r}.")
+    async def refresh_followed():
+        from . import picker
 
-    @client.on(events.NewMessage(chats=list(sources.keys())))
+        fresh = {}
+        async for dialog in client.iter_dialogs():
+            if not (dialog.is_channel or dialog.is_group):
+                continue
+            if dialog.id in exclude:
+                continue
+            name = dialog.name or str(dialog.id)
+            if only_signal and not picker.looks_like_signals(name):
+                continue
+            fresh[dialog.id] = name
+        followed.clear()
+        followed.update(fresh)
+        print(f"Auto-follow: watching {len(followed)} signal channel(s) "
+              f"(new ones you join are picked up automatically).")
+
+    if auto:
+        await refresh_followed()
+        chats = None       # listen to everything; filter inside the handler
+    else:
+        if not sources:
+            raise SystemExit("No channels configured. Run: python -m sigfilter.cli pick "
+                             "(or turn on auto-follow: python -m sigfilter.cli follow auto)")
+        chats = list(sources.keys())
+        print(f"Watching {len(sources)} channel(s). Forwarding to {cfg['destination']!r}.")
+
+    @client.on(events.NewMessage(chats=chats))
     async def _on_message(event):
+        chat_id = event.chat_id
+        override = None
+        if auto:
+            from . import picker
+
+            if chat_id in exclude:
+                return
+            if not (event.is_channel or event.is_group):
+                return                                    # ignore private chats
+            name = followed.get(chat_id)
+            if name is None:
+                title = getattr(event.chat, "title", None) or str(chat_id)
+                if only_signal and not picker.looks_like_signals(title):
+                    return
+                name = title
+                followed[chat_id] = name                  # remember a newly-joined channel
+            override = {"name": name, "weight": 1.0}
         text = event.message.message or ""
         ts = int(event.message.date.timestamp())
         with db.connect() as conn:
             try:
-                await _handle(client, conn, cfg, event.chat_id, event.message.id, text, ts)
+                await _handle(client, conn, cfg, chat_id, event.message.id, text, ts,
+                              channel_override=override)
             except Exception as exc:                      # one bad message must not kill the listener
                 print(f"[error  ] {type(exc).__name__}: {exc}")
 
     asyncio.create_task(_heartbeat_loop())
+    if auto:
+        asyncio.create_task(_refresh_loop(cfg, refresh_followed))
     if cfg["outcomes"]["enabled"]:
         asyncio.create_task(_outcome_loop(cfg))
     await client.run_until_disconnected()
+
+
+async def _refresh_loop(cfg, refresh_followed):
+    """Re-scan the channel list periodically so renamed or newly-joined channels
+    stay current (new messages are already caught live; this keeps the list tidy
+    and prints an updated count)."""
+    hours = max(1, int(cfg.get("auto_follow", {}).get("refresh_hours", 24)))
+    while True:
+        await asyncio.sleep(hours * 3600)
+        try:
+            await refresh_followed()
+        except Exception as exc:
+            print(f"[error  ] refresh: {type(exc).__name__}: {exc}")
 
 
 async def _heartbeat_loop():

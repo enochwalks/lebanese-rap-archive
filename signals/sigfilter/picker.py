@@ -104,3 +104,34 @@ def set_gate_value(key, value, path=None):
     shutil.copy(cfg_path, backup)
     cfg_path.write_text(new_text, encoding="utf-8")
     return cfg_path, number
+
+
+def set_auto_follow(enabled, path=None):
+    """Turn auto-follow on or off in config.yaml, adding the block if it is missing.
+    Preserves the rest of the file."""
+    cfg_path = Path(path or config.ROOT / "config.yaml")
+    if not cfg_path.exists():
+        import shutil
+        shutil.copy(config.ROOT / "config.example.yaml", cfg_path)
+    text = cfg_path.read_text(encoding="utf-8")
+    flag = "true" if enabled else "false"
+
+    block_re = _re.compile(r"(auto_follow:\s*\n(?:[ \t]+.*\n?)*)", _re.M)
+    enabled_re = _re.compile(r"^(\s*enabled\s*:\s*)(true|false)(.*)$", _re.M | _re.I)
+
+    m = block_re.search(text)
+    if m:
+        block = m.group(1)
+        new_block = enabled_re.sub(rf"\g<1>{flag}\g<3>", block, count=1)
+        if new_block == block and "enabled" not in block:
+            new_block = block.rstrip("\n") + f"\n  enabled: {flag}\n"
+        text = text[:m.start(1)] + new_block + text[m.end(1):]
+    else:
+        text = text.rstrip("\n") + (
+            f"\n\nauto_follow:\n  enabled: {flag}\n"
+            "  only_signal_like: true\n  refresh_hours: 24\n  exclude: []\n")
+
+    import shutil
+    shutil.copy(cfg_path, cfg_path.with_suffix(".yaml.bak"))
+    cfg_path.write_text(text, encoding="utf-8")
+    return cfg_path

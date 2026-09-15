@@ -31,6 +31,8 @@ DEFAULTS = {
         "trust_prior_trades": 10,
     },
     "outcomes": {"enabled": True, "horizon_hours": 72, "poll_minutes": 30},
+    "auto_follow": {"enabled": False, "only_signal_like": True,
+                    "refresh_hours": 24, "exclude": []},
     "llm_fallback": {"enabled": False, "model": "claude-sonnet-5"},
 }
 

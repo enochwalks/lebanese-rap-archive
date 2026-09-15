@@ -175,3 +175,33 @@ class TestGateSetter(unittest.TestCase):
         cfg = yaml.safe_load(self.path.read_text())
         self.assertEqual(cfg["gate"]["daily_cap"], 8)
         self.assertEqual(cfg["sources"][0]["id"], -1)
+
+
+class TestAutoFollowToggle(unittest.TestCase):
+    def setUp(self):
+        self.path = Path(tempfile.mkdtemp()) / "config.yaml"
+
+    def _write(self, text):
+        self.path.write_text(text, encoding="utf-8")
+
+    def test_adds_block_when_absent(self):
+        self._write("sources:\n  - id: -1\n    name: \"x\"\n\ndestination: \"me\"\n")
+        picker.set_auto_follow(True, path=self.path)
+        import yaml
+        cfg = yaml.safe_load(self.path.read_text())
+        self.assertTrue(cfg["auto_follow"]["enabled"])
+        self.assertEqual(cfg["destination"], "me")      # rest preserved
+
+    def test_flips_existing_flag(self):
+        self._write("auto_follow:\n  enabled: false\n  refresh_hours: 24\n\ndestination: \"me\"\n")
+        picker.set_auto_follow(True, path=self.path)
+        import yaml
+        cfg = yaml.safe_load(self.path.read_text())
+        self.assertTrue(cfg["auto_follow"]["enabled"])
+        self.assertEqual(cfg["auto_follow"]["refresh_hours"], 24)
+
+    def test_turns_off(self):
+        self._write("auto_follow:\n  enabled: true\n\ndestination: \"me\"\n")
+        picker.set_auto_follow(False, path=self.path)
+        import yaml
+        self.assertFalse(yaml.safe_load(self.path.read_text())["auto_follow"]["enabled"])
