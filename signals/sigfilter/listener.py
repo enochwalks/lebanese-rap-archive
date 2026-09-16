@@ -31,7 +31,17 @@ def build_client():
         # StringSession lives in memory only and would re-prompt for the phone
         # code on every command, which Telegram rate-limits.
         session = str(config.ROOT / "sigfilter.session")
-    return TelegramClient(session, int(api_id), api_hash)
+    # Survive daily internet drops: keep retrying the connection instead of
+    # giving up. auto_reconnect handles brief blips; the supervisor loop in
+    # watch() handles longer outages when even these retries are exhausted.
+    return TelegramClient(
+        session, int(api_id), api_hash,
+        connection_retries=1000000,   # effectively unlimited; supervisor loop backs it up
+        retry_delay=5,                # seconds between attempts
+        auto_reconnect=True,
+        request_retries=5,
+        timeout=30,
+    )
 
 
 async def _handle(client, cfg, channel_id, msg_id, text, ts, channel_override=None):
@@ -149,7 +159,31 @@ async def watch(cfg):
         asyncio.create_task(_refresh_loop(cfg, refresh_followed))
     if cfg["outcomes"]["enabled"]:
         asyncio.create_task(_outcome_loop(cfg))
-    await client.run_until_disconnected()
+    await _run_forever(client)
+
+
+async def _run_forever(client):
+    """Keep the listener alive across internet outages.
+
+    Telethon's own retries give up after a while and raise, which used to kill the
+    whole agent the first time the connection dropped for more than a few seconds.
+    Here that just pauses the agent: it waits, reconnects, and resumes - the event
+    handlers stay registered, so no signals are missed once the network returns.
+    """
+    backoff = 5
+    while True:
+        try:
+            if not client.is_connected():
+                await client.connect()
+            await client.run_until_disconnected()
+            backoff = 5                                   # clean disconnect; loop reconnects
+        except (ConnectionError, OSError, asyncio.TimeoutError) as exc:
+            print(f"[net    ] connection lost ({type(exc).__name__}); "
+                  f"reconnecting in {backoff}s. The agent is still running.")
+        except Exception as exc:
+            print(f"[net    ] {type(exc).__name__}: {exc}; reconnecting in {backoff}s.")
+        await asyncio.sleep(backoff)
+        backoff = min(backoff * 2, 60)                    # back off up to 1 minute
 
 
 async def _refresh_loop(cfg, refresh_followed):
