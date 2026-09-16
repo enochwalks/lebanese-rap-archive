@@ -179,6 +179,78 @@ def cmd_grade(args):
     print("\nThen:  .\\run.ps1 stats")
 
 
+def cmd_check(args):
+    """Health check - run before leaving it unattended. Reports each part OK/WARN."""
+    import os
+    import time as _time
+
+    from . import mt5source
+
+    cfg = config.load(args.config)
+    ok, warn = "  OK  ", " WARN "
+    print("\n=== sigfilter health check ===\n")
+
+    # 1. Login session
+    session = config.ROOT / "sigfilter.session"
+    if session.exists() or os.environ.get("TG_SESSION"):
+        print(f"[{ok}] Telegram login saved")
+    else:
+        print(f"[{warn}] Not logged in - run: python -m sigfilter.cli login")
+
+    # 2. Channels / auto-follow
+    auto = cfg.get("auto_follow", {}).get("enabled")
+    n = len(cfg.get("sources") or [])
+    if auto:
+        print(f"[{ok}] Auto-follow ON (watches all signal channels automatically)")
+    elif n:
+        print(f"[{ok}] Watching {n} picked channel(s)")
+    else:
+        print(f"[{warn}] No channels - run: python -m sigfilter.cli pick  (or follow auto)")
+
+    # 3. Is the agent actually running? (heartbeat)
+    with db.connect() as conn:
+        hb = int(db.get_state(conn, "heartbeat", 0) or 0)
+        day_start = int(_time.time()) - (int(_time.time()) % 86400)
+        read_today = conn.execute(
+            "SELECT COUNT(*) AS n FROM signals WHERE ts >= ?", (day_start,)).fetchone()["n"]
+        fwd_today = conn.execute(
+            "SELECT COUNT(*) AS n FROM signals WHERE forwarded = 1 AND ts >= ?",
+            (day_start,)).fetchone()["n"]
+        graded = conn.execute(
+            "SELECT COUNT(*) AS n FROM signals WHERE outcome IN ('WIN','LOSS')").fetchone()["n"]
+    age = int(_time.time()) - hb if hb else None
+    if age is not None and age < 180:
+        print(f"[{ok}] Agent is RUNNING (last heartbeat {age}s ago)")
+    else:
+        print(f"[{warn}] Agent NOT running - open the Start Signal Agent shortcut")
+
+    # 4. Price feed (MT5) - needed for grading and the price-sanity check
+    if mt5source.available():
+        px = mt5source.current_price("XAUUSD")
+        if px:
+            print(f"[{ok}] MetaTrader 5 connected (gold price {px:g})")
+        else:
+            print(f"[{warn}] MT5 connected but no gold price - check symbol in Market Watch")
+    else:
+        print(f"[{warn}] MT5 not connected - open MetaTrader 5 and log in "
+              "(grading + stale-price check need it)")
+
+    # 5. Phone push
+    if os.environ.get("NTFY_TOPIC"):
+        print(f"[{ok}] Phone push configured")
+    else:
+        print(f"[{warn}] No phone push (NTFY_TOPIC not set in .env)")
+
+    # 6. Gate + today's activity
+    gate = cfg["gate"]
+    print(f"\nGate: min score {gate['min_score']}, min risk/reward {gate['min_risk_reward']}, "
+          f"stop-loss required: {gate.get('require_stop_loss', True)}")
+    print(f"Today: {read_today} message(s) scored, {fwd_today} forwarded.")
+    print(f"Graded outcomes so far: {graded}.")
+    print("\nIf every line says OK, it is safe to leave running. "
+          "Keep the PC on and MT5 open.\n")
+
+
 def cmd_testsend(args):
     """Send one sample signal through the real delivery path - Telegram, and
     ntfy push if configured - so you can confirm both actually arrive."""
@@ -456,6 +528,8 @@ def main(argv=None):
     probe_parser = sub.add_parser("probe", help="test the price feed for one symbol")
     probe_parser.add_argument("symbol", help="e.g. XAUUSD, BTCUSDT, EURUSD")
 
+    sub.add_parser("check", help="health check - is everything working?")
+
     sub.add_parser("testsend", help="send a sample signal to Telegram and ntfy to test delivery")
 
     sub.add_parser("clean", help="remove mis-parsed junk symbols from the database")
@@ -486,7 +560,7 @@ def main(argv=None):
         "dashboard": cmd_dashboard, "pick": cmd_pick, "backfill": cmd_backfill,
         "follow": cmd_follow,
         "grade": cmd_grade, "probe": cmd_probe, "set": cmd_set, "clean": cmd_clean,
-        "testsend": cmd_testsend,
+        "testsend": cmd_testsend, "check": cmd_check,
     }
     handlers[args.cmd](args)
 
