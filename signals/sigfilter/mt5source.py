@@ -95,3 +95,24 @@ def candles(symbol, start_s, end_s):
     if rates is None:
         return None
     return [(float(r["high"]), float(r["low"])) for r in rates]
+
+
+def current_price(symbol):
+    """The live mid price for a symbol from MT5, or None if unavailable."""
+    if not available():
+        return None
+    mt5 = _mt5()
+    name = _resolve(mt5, symbol)
+    if not name:
+        return None
+    try:
+        mt5.symbol_select(name, True)
+        tick = mt5.symbol_info_tick(name)
+    except Exception:
+        return None
+    if not tick:
+        return None
+    bid, ask = getattr(tick, "bid", None), getattr(tick, "ask", None)
+    if bid and ask:
+        return (bid + ask) / 2.0
+    return bid or ask or None

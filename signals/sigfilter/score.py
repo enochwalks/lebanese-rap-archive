@@ -140,3 +140,36 @@ def gate_reasons(sig, score, consensus_info, age_seconds, cfg, forwarded_today=0
     if forwarded_today >= gate.get("daily_cap", 999):
         reasons.append(f"daily cap of {gate['daily_cap']} already reached")
     return reasons
+
+
+def price_staleness(sig, current_price):
+    """Has the market already left this entry behind?
+
+    Returns a rejection reason if the live price has run past the entry by more
+    than the trade's own risk (you have missed more than 1R and are chasing), or
+    already reached the stop. Returns None when it is still tradeable, or when
+    there is no live price to check against.
+    """
+    if current_price is None:
+        return None
+    entry, sl, side = sig.entry, sig.sl, sig.side
+    if entry is None or sl is None or side is None:
+        return None
+    risk = abs(entry - sl)
+    if risk <= 0:
+        return None
+    if side == "BUY":
+        if current_price <= sl:
+            return f"price {current_price:g} already at/below the stop {sl:g}"
+        missed = current_price - entry
+        if missed > risk:
+            return (f"price {current_price:g} already {missed:.1f} above entry "
+                    f"{entry:g} — the move is gone (chasing)")
+    else:  # SELL
+        if current_price >= sl:
+            return f"price {current_price:g} already at/above the stop {sl:g}"
+        missed = entry - current_price
+        if missed > risk:
+            return (f"price {current_price:g} already {missed:.1f} below entry "
+                    f"{entry:g} — the move is gone (chasing)")
+    return None

@@ -4,7 +4,7 @@ import hashlib
 import time
 from datetime import datetime, timezone
 
-from . import consensus, db, parse, promo, score
+from . import consensus, db, mt5source, parse, promo, score
 from .config import source_map
 
 
@@ -69,6 +69,12 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None, historical=Fal
     )
     forwarded = 0 if historical else db.forwarded_today(conn, now)
     reasons = score.gate_reasons(sig, total, info, age, cfg, forwarded_today=forwarded)
+    # Live price sanity: never forward a signal the market has already run past.
+    # Only checked live (not in backfill), and only when MT5 can price it.
+    if not historical:
+        stale = score.price_staleness(sig, mt5source.current_price(sig.symbol))
+        if stale:
+            reasons.append(stale)
     verdict = "ACCEPT" if not reasons else "REJECT"
 
     signal_id = db.record(

@@ -102,3 +102,34 @@ class TestCopyPasteDetection(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPriceStaleness(unittest.TestCase):
+    """Block signals the market has already run past — the exact case where a gold
+    BUY at 4315 arrives while price is already 4346."""
+
+    def _sig(self, text):
+        from sigfilter.parse import parse
+        return parse(text)
+
+    def test_buy_price_ran_past_entry_is_blocked(self):
+        sig = self._sig("XAUUSD BUY entry 4315 TP1 4320 TP4 4345 SL 4305")
+        reason = score.price_staleness(sig, 4346)
+        self.assertIsNotNone(reason)
+        self.assertIn("chasing", reason)
+
+    def test_buy_price_near_entry_is_ok(self):
+        sig = self._sig("XAUUSD BUY entry 4315 TP1 4320 TP4 4345 SL 4305")
+        self.assertIsNone(score.price_staleness(sig, 4318))
+
+    def test_buy_price_below_stop_is_blocked(self):
+        sig = self._sig("XAUUSD BUY entry 4315 TP1 4320 TP4 4345 SL 4305")
+        self.assertIsNotNone(score.price_staleness(sig, 4300))
+
+    def test_sell_price_ran_past_entry_is_blocked(self):
+        sig = self._sig("XAUUSD SELL entry 4315 TP1 4310 TP4 4295 SL 4325")
+        self.assertIsNotNone(score.price_staleness(sig, 4280))
+
+    def test_no_live_price_means_no_block(self):
+        sig = self._sig("XAUUSD BUY entry 4315 TP1 4320 TP4 4345 SL 4305")
+        self.assertIsNone(score.price_staleness(sig, None))
