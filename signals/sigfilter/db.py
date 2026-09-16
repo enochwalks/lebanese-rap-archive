@@ -52,13 +52,25 @@ def _migrate(conn):
             conn.execute(f"ALTER TABLE signals ADD COLUMN {column} {ddl}")
 
 
+_INITIALISED = set()
+
+
 @contextmanager
 def connect(path=None):
-    conn = sqlite3.connect(path or db_path(), timeout=30)
+    resolved = path or db_path()
+    conn = sqlite3.connect(resolved, timeout=30)
     conn.row_factory = sqlite3.Row
+    # WAL lets the dashboard read while the agent writes, instead of the two
+    # blocking each other into "database is locked"; the busy timeout waits for
+    # a brief lock rather than failing immediately.
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA synchronous=NORMAL")
     try:
-        conn.executescript(SCHEMA)
-        _migrate(conn)
+        if resolved not in _INITIALISED:
+            conn.executescript(SCHEMA)
+            _migrate(conn)
+            _INITIALISED.add(resolved)
         yield conn
         conn.commit()
     finally:

@@ -34,17 +34,22 @@ def build_client():
     return TelegramClient(session, int(api_id), api_hash)
 
 
-async def _handle(client, conn, cfg, channel_id, msg_id, text, ts, channel_override=None):
-    result = pipeline.process(conn, cfg, channel_id=channel_id, msg_id=msg_id, text=text,
-                              ts=ts, channel_override=channel_override)
+async def _handle(client, cfg, channel_id, msg_id, text, ts, channel_override=None):
+    # Score and record in a short-lived connection, then CLOSE it before any
+    # network send. Holding the database open across an `await` was the cause of
+    # the "database is locked" storm: while one message waited on Telegram, every
+    # other incoming message piled up behind its open write lock.
+    with db.connect() as conn:
+        result = pipeline.process(conn, cfg, channel_id=channel_id, msg_id=msg_id, text=text,
+                                  ts=ts, channel_override=channel_override)
     if result["status"] != "scored":
         return result
     if result["verdict"] == "ACCEPT":
         body = deliver.format_signal(result)
         await deliver.send_telegram(client, cfg["destination"], body)
         deliver.push_ntfy(body)
-        db.mark_forwarded(conn, result["signal_id"])
-        conn.commit()
+        with db.connect() as conn:                        # brief, after the send
+            db.mark_forwarded(conn, result["signal_id"])
         print(f"[FORWARD] {result['signal'].symbol} {result['signal'].side} "
               f"score={result['score']} via {result['channel']}")
     else:
@@ -133,12 +138,11 @@ async def watch(cfg):
             override = {"name": name, "weight": 1.0}
         text = event.message.message or ""
         ts = int(event.message.date.timestamp())
-        with db.connect() as conn:
-            try:
-                await _handle(client, conn, cfg, chat_id, event.message.id, text, ts,
-                              channel_override=override)
-            except Exception as exc:                      # one bad message must not kill the listener
-                print(f"[error  ] {type(exc).__name__}: {exc}")
+        try:
+            await _handle(client, cfg, chat_id, event.message.id, text, ts,
+                          channel_override=override)
+        except Exception as exc:                          # one bad message must not kill the listener
+            print(f"[error  ] {type(exc).__name__}: {exc}")
 
     asyncio.create_task(_heartbeat_loop())
     if auto:
@@ -247,7 +251,7 @@ async def poll(cfg, limit=40):
                 text = msg.message or ""
                 if not text.strip():
                     continue
-                await _handle(client, conn, cfg, channel_id, msg.id,
+                await _handle(client, cfg, channel_id, msg.id,
                               text, int(msg.date.timestamp()))
                 processed += 1
             db.set_state(conn, key, highest)
