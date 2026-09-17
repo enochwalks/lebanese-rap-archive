@@ -43,6 +43,12 @@ outcomes:
 
 # Auto-follow: watch EVERY signal-looking channel you are a member of, and pick up
 # new ones you join automatically. Turn it on with:  python -m sigfilter.cli follow auto
+# Your account, so every signal comes with a safe lot size. Set it with:
+#   python -m sigfilter.cli account 200 2      (balance 200, risk 2% per trade)
+account:
+  balance: 0            # your account size in USD (0 = don't suggest a size)
+  risk_percent: 2.0     # max % of the account to risk on one trade
+
 auto_follow:
   enabled: false
   only_signal_like: true   # only channels whose name looks like signals (skips news/chat)

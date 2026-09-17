@@ -30,6 +30,17 @@ def format_signal(result):
         lines.append("Note: near-identical to another channel's post — counted as one source, not confirmation")
     top = sorted(result["breakdown"].items(), key=lambda kv: -kv[1]["points"])[:3]
     lines.append("Why: " + ", ".join(f"{k} {v['points']}pts" for k, v in top))
+
+    size = result.get("sizing")
+    if size:
+        lines.append("")
+        if size["too_big"]:
+            lines.append(f"⚠️ SIZE: even the smallest 0.01 lot risks ${size['risk_at_min_lot']:g} "
+                         f"({size['pct_at_min_lot']:g}% of your account) — above your limit.")
+            lines.append("   Too big for this account. Skip, or accept the higher risk knowingly.")
+        else:
+            lines.append(f"SIZE: {size['lot']:g} lot — risks ${size['risk_at_lot']:g} "
+                         f"({size['pct_at_lot']:g}% of your account) if the stop is hit.")
     return "\n".join(lines)
 
 

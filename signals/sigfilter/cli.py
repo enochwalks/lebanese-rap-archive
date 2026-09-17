@@ -179,6 +179,53 @@ def cmd_grade(args):
     print("\nThen:  .\\run.ps1 stats")
 
 
+def cmd_account(args):
+    """Set your account balance and risk %, so signals carry a safe lot size."""
+    from . import picker
+
+    try:
+        balance = float(args.balance)
+        risk = float(args.risk) if args.risk is not None else None
+    except ValueError:
+        print("Usage: account <balance> [risk%]   e.g.  account 200 2")
+        return
+    path = picker.set_account(balance, risk, args.config)
+    cfg = config.load(args.config)
+    r = cfg["account"]["risk_percent"]
+    print(f"Account set: ${balance:g}, risking {r:g}% per trade ({path.name}).")
+    print("Signals now include a suggested lot size. Restart the agent to apply.")
+
+
+def cmd_size(args):
+    """Work out the lot size for one trade by hand: size <entry> <sl> [balance]."""
+    from . import sizing, symbols
+
+    try:
+        entry, sl = float(args.entry), float(args.sl)
+    except ValueError:
+        print("Usage: size <entry> <stop-loss> [balance]   e.g.  size 4315 4305 200")
+        return
+    cfg = config.load(args.config)
+    balance = float(args.balance) if args.balance else cfg["account"]["balance"]
+    risk = cfg["account"]["risk_percent"]
+    if not balance:
+        print("Set your account first: python -m sigfilter.cli account 200 2")
+        return
+    ac = "metal" if entry > 100 else "forex"      # gold-priced vs fx-priced, rough guess
+    s = sizing.suggest(ac, entry, sl, balance, risk)
+    if not s:
+        print("Could not size that (check the numbers).")
+        return
+    print(f"\nAccount ${balance:g}, risk {risk:g}%  |  entry {entry:g}  stop {sl:g}  "
+          f"(distance {s['distance']:g})")
+    if s["too_big"]:
+        print(f"  ⚠️  Even 0.01 lot risks ${s['risk_at_min_lot']:g} ({s['pct_at_min_lot']:g}%) "
+              "- above your limit. Too big for this account.")
+    else:
+        print(f"  Use {s['lot']:g} lot - risks ${s['risk_at_lot']:g} ({s['pct_at_lot']:g}%).")
+    print()
+
+
 def cmd_check(args):
     """Health check - run before leaving it unattended. Reports each part OK/WARN."""
     import os
@@ -528,6 +575,15 @@ def main(argv=None):
     probe_parser = sub.add_parser("probe", help="test the price feed for one symbol")
     probe_parser.add_argument("symbol", help="e.g. XAUUSD, BTCUSDT, EURUSD")
 
+    account_parser = sub.add_parser("account", help="set balance & risk for safe lot sizing")
+    account_parser.add_argument("balance")
+    account_parser.add_argument("risk", nargs="?")
+
+    size_parser = sub.add_parser("size", help="lot size for one trade: size <entry> <sl> [balance]")
+    size_parser.add_argument("entry")
+    size_parser.add_argument("sl")
+    size_parser.add_argument("balance", nargs="?")
+
     sub.add_parser("check", help="health check - is everything working?")
 
     sub.add_parser("testsend", help="send a sample signal to Telegram and ntfy to test delivery")
@@ -561,6 +617,7 @@ def main(argv=None):
         "follow": cmd_follow,
         "grade": cmd_grade, "probe": cmd_probe, "set": cmd_set, "clean": cmd_clean,
         "testsend": cmd_testsend, "check": cmd_check,
+        "account": cmd_account, "size": cmd_size,
     }
     handlers[args.cmd](args)
 

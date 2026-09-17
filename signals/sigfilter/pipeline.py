@@ -4,7 +4,7 @@ import hashlib
 import time
 from datetime import datetime, timezone
 
-from . import consensus, db, mt5source, parse, promo, score
+from . import consensus, db, mt5source, parse, promo, score, sizing
 from .config import source_map
 
 
@@ -96,4 +96,8 @@ def process(conn, cfg, *, channel_id, msg_id, text, ts, now=None, historical=Fal
         "record": (wins, losses),
         "promo": (promo_count, msg_count, round(promo_penalty, 2)),
         "historical": historical,
+        "sizing": sizing.suggest(
+            sig.asset_class, sig.entry, sig.sl,
+            cfg.get("account", {}).get("balance", 0),
+            cfg.get("account", {}).get("risk_percent", 2.0)),
     }

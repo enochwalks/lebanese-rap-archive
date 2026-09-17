@@ -33,6 +33,7 @@ DEFAULTS = {
     "outcomes": {"enabled": True, "horizon_hours": 72, "poll_minutes": 30},
     "auto_follow": {"enabled": False, "only_signal_like": True,
                     "refresh_hours": 24, "exclude": []},
+    "account": {"balance": 0.0, "risk_percent": 2.0},
     "llm_fallback": {"enabled": False, "model": "claude-sonnet-5"},
 }
 

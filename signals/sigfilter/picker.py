@@ -135,3 +135,35 @@ def set_auto_follow(enabled, path=None):
     shutil.copy(cfg_path, cfg_path.with_suffix(".yaml.bak"))
     cfg_path.write_text(text, encoding="utf-8")
     return cfg_path
+
+
+def set_account(balance, risk_percent=None, path=None):
+    """Write account balance (and optional risk %) into config.yaml, preserving
+    the rest and adding the block if it is missing."""
+    cfg_path = Path(path or config.ROOT / "config.yaml")
+    if not cfg_path.exists():
+        import shutil
+        shutil.copy(config.ROOT / "config.example.yaml", cfg_path)
+    text = cfg_path.read_text(encoding="utf-8")
+
+    def set_line(block_text, key, value):
+        rex = _re.compile(rf"^(\s*{key}\s*:\s*)([0-9.]+)(.*)$", _re.M)
+        if rex.search(block_text):
+            return rex.sub(rf"\g<1>{value}\g<3>", block_text, count=1)
+        return block_text.rstrip("\n") + f"\n  {key}: {value}\n"
+
+    block_re = _re.compile(r"(account:\s*\n(?:[ \t]+.*\n?)*)", _re.M)
+    m = block_re.search(text)
+    if m:
+        block = set_line(m.group(1), "balance", balance)
+        if risk_percent is not None:
+            block = set_line(block, "risk_percent", risk_percent)
+        text = text[:m.start(1)] + block + text[m.end(1):]
+    else:
+        risk = risk_percent if risk_percent is not None else 2.0
+        text = text.rstrip("\n") + f"\n\naccount:\n  balance: {balance}\n  risk_percent: {risk}\n"
+
+    import shutil
+    shutil.copy(cfg_path, cfg_path.with_suffix(".yaml.bak"))
+    cfg_path.write_text(text, encoding="utf-8")
+    return cfg_path
