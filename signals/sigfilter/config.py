@@ -11,7 +11,7 @@ DEFAULTS = {
     "sources": [],
     "destination": "me",
     "gate": {
-        "min_score": 70,
+        "min_score": 60,
         "require_stop_loss": True,
         "min_risk_reward": 1.2,
         "max_leverage": 20,

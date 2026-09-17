@@ -52,12 +52,14 @@ class TestPipeline(unittest.TestCase):
         self.assertEqual(relay["consensus"]["duplicate_of"], -100)
         self.assertEqual(relay["consensus"]["agreeing_channels"], 0)
 
-    def test_opposite_calls_block_both_directions(self):
+    def test_opposite_call_is_seen_as_conflict_not_hard_blocked(self):
+        # An opposing call registers as a conflict (which lowers the score) but no
+        # longer vetoes the trade — gold channels always disagree somewhere.
         with db.connect(self.db) as conn:
             self._run(conn, -100, CLEAN, 1, offset=120)
             against = self._run(conn, -200, OPPOSITE, 2)
-        self.assertEqual(against["verdict"], "REJECT")
-        self.assertTrue(any("opposite direction" in r for r in against["reasons"]))
+        self.assertEqual(against["consensus"]["conflicting_channels"], 1)
+        self.assertFalse(any("opposite direction" in r for r in against["reasons"]))
 
     def test_casino_signal_rejected(self):
         with db.connect(self.db) as conn:

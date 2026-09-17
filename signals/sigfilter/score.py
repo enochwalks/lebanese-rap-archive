@@ -62,7 +62,7 @@ def consensus_score(info):
     if info.get("duplicate_of") is not None and agree == 0:
         return 0.35                      # relayed copy: no new information, but no penalty either
     base = {0: 0.5, 1: 0.75, 2: 0.9}.get(agree, 1.0)
-    base -= 0.3 * conflict
+    base -= min(0.4, 0.12 * conflict)      # capped: disagreement dents, never zeroes
     return max(0.0, min(1.0, base))
 
 
@@ -133,8 +133,6 @@ def gate_reasons(sig, score, consensus_info, age_seconds, cfg, forwarded_today=0
         reasons.append(f"leverage {sig.leverage}x above maximum {gate['max_leverage']}x")
     if age_seconds is not None and age_seconds > gate["max_age_minutes"] * 60:
         reasons.append(f"stale by {int(age_seconds / 60)} minutes")
-    if consensus_info.get("conflicting_channels", 0) > 0:
-        reasons.append(f"{consensus_info['conflicting_channels']} channel(s) posting the opposite direction")
     if score < gate["min_score"]:
         reasons.append(f"score {score} below threshold {gate['min_score']}")
     if forwarded_today >= gate.get("daily_cap", 999):

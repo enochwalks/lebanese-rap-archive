@@ -67,11 +67,16 @@ class TestGate(unittest.TestCase):
         _, reasons = self._score(sig)
         self.assertIn("no stop-loss", reasons)
 
-    def test_conflicting_channels_block(self):
+    def test_conflict_lowers_score_but_does_not_hard_block(self):
+        # With many gold channels there is always two-way disagreement, so a
+        # conflict must dent the score, not veto the trade outright.
         sig = parse("BTC LONG entry 62000 TP 66000 SL 61000")
-        info = {"agreeing_channels": 1, "conflicting_channels": 1, "duplicate_of": None}
-        _, reasons = self._score(sig, info=info)
-        self.assertTrue(any("opposite direction" in r for r in reasons))
+        agree = {"agreeing_channels": 1, "conflicting_channels": 0, "duplicate_of": None}
+        conflict = {"agreeing_channels": 1, "conflicting_channels": 2, "duplicate_of": None}
+        clean_total, clean_reasons = self._score(sig, info=agree)
+        conf_total, conf_reasons = self._score(sig, info=conflict)
+        self.assertLess(conf_total, clean_total)                       # score drops
+        self.assertFalse(any("opposite direction" in r for r in conf_reasons))  # not vetoed
 
     def test_clean_confirmed_signal_passes(self):
         sig = parse("BTC LONG entry 62000 TP1 64500 TP2 66000 SL 61000")
