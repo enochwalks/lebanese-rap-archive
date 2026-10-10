@@ -1,5 +1,8 @@
 # Lebanese Rap Archives — Automation
 
+> **Claude unavailable?** Everything in this repo (and the projects on its other
+> branches) can be run without it: see [`shadow/README.md`](shadow/README.md).
+
 Separate, independent project from the Shorts channel bot. Own Google account,
 own OAuth credentials, own upload quota (6/day, untouched by the other channel).
 

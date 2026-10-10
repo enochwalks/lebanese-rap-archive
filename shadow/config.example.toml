@@ -1,0 +1,60 @@
+# Copy to config.toml (git-ignored) and edit. API keys are NEVER written here:
+# you name the environment variable that holds the key.
+
+# Where your projects are checked out. `shadow.py fetch` clones into it.
+workspace = "~/shadow-projects"
+
+# Optional: point a checkout or a single project somewhere else.
+# [checkouts]
+# lebanese-rap-archive = "C:/Users/me/Documents/lebanese-rap-archive"
+# [paths]
+# sigfilter = "~/lebanese-rap-archive/signals"
+
+task_timeout = 900   # seconds a task may run when the shadow runs it for you
+
+# Brains, tried top to bottom; the first that answers is used.
+# Delete the ones you don't have. With none reachable, `ask` still answers
+# from the registry and runbooks (no AI at all).
+
+# 1. Local, offline, free, no company can switch it off.
+#    Install https://ollama.com  then:  ollama pull qwen2.5:14b
+#    (smaller PC: qwen2.5:7b or llama3.1:8b)
+[[providers]]
+type = "ollama"
+model = "qwen2.5:14b"
+# base_url = "http://localhost:11434"
+
+# 2. Any OpenAI-compatible API. Pick one, set its key in the environment.
+[[providers]]
+type = "openai"
+model = "gpt-4.1"
+api_key_env = "OPENAI_API_KEY"
+
+# [[providers]]          # Google Gemini (free tier)
+# type = "openai"
+# base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+# model = "gemini-2.5-flash"
+# api_key_env = "GEMINI_API_KEY"
+
+# [[providers]]          # OpenRouter: one key, hundreds of models
+# type = "openai"
+# base_url = "https://openrouter.ai/api/v1"
+# model = "deepseek/deepseek-chat"
+# api_key_env = "OPENROUTER_API_KEY"
+
+# [[providers]]          # Groq (fast, free tier)
+# type = "openai"
+# base_url = "https://api.groq.com/openai/v1"
+# model = "llama-3.3-70b-versatile"
+# api_key_env = "GROQ_API_KEY"
+
+# [[providers]]          # LM Studio on this PC (offline)
+# type = "openai"
+# base_url = "http://localhost:1234/v1"
+# model = "local-model"
+
+# 3. Claude, when it is back.
+# [[providers]]
+# type = "anthropic"
+# model = "claude-opus-5-5"
+# api_key_env = "ANTHROPIC_API_KEY"

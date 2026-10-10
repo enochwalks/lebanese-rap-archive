@@ -1,0 +1,295 @@
+# Shadow registry: every project, where it lives, how to run it, how it
+# connects to the others. This file IS the knowledge. Keep it up to date and
+# the shadow (or any human, or any AI) can run everything without Claude.
+#
+# Field guide
+#   repo / branch      where the code lives; `shadow.py fetch <id>` clones it
+#   dir                folder name under the workspace (see config.toml)
+#   subdir             the project's own folder inside that checkout
+#   runs_on            where it actually runs day to day
+#   schedule           when it runs on its own (human words + cron if any)
+#   needs.bins         programs that must be on PATH
+#   needs.files        files that must exist (relative to the project folder)
+#   needs.env          environment variables that must be set (names only!)
+#   secrets            names of secret files/vars. Values NEVER go in here.
+#   depends_on         other project ids this one needs
+#   feeds              other project ids that use this one's output
+#   claude_touchpoints where the project itself calls Claude, and the fallback
+#   logs               log files `shadow.py logs <id>` will tail
+#   [projects.X.tasks.NAME]
+#       cmd            shell command, run inside the project folder
+#       cmd_windows    used instead of cmd on Windows, if set
+#       env            extra environment variables for this task only
+#       manual         a step a human does in a browser (no cmd)
+#       danger         true = touches the outside world (uploads, money,
+#                      messages). The shadow always asks before running it.
+#       desc           one line, plain words
+
+[projects.rap-archive]
+name = "Lebanese Rap Archive - daily YouTube pipeline"
+summary = """
+One run of main.py = one video. Picks the next song with confirmed permission
+from the SQLite tracker, renders it (artwork moving on the beat + waveform,
+style "combo"), uploads it to YouTube as PRIVATE, marks it done. Resumable:
+a failed run is retried next time without re-rendering or skipping a song.
+A run.lock file stops two runs overlapping (that once caused double uploads).
+"""
+repo = "https://github.com/enochwalks/lebanese-rap-archive.git"
+branch = "master"
+dir = "lebanese-rap-archive"
+subdir = ""
+runs_on = "Owner's PC (Windows Task Scheduler / cron)"
+schedule = "Once a day: python main.py"
+depends_on = []
+feeds = []
+logs = ["logs/run.log"]
+secrets = ["client_secrets.json (Google OAuth, 2nd Google account)", "token.pickle (auto-created after first login)", "token_readonly.pickle (channel_sync)"]
+claude_touchpoints = ["None. Runs with no AI at all."]
+notes = """
+- Permission gate: a song is only uploaded once permission_status = confirmed.
+  Never bypass this. Content ID can still claim via DistroKid/CD Baby.
+- Upload quota: 6/day on this channel's own Google account. Separate from the
+  Shorts channel bot (different account, different project, not in this repo).
+- Uploads are PRIVATE on purpose; the owner publishes by hand in YouTube Studio.
+- Missing audio file = song skipped (not marked done). Fix the path with
+  `shadow.py run rap-archive fix-path <song-id> "<new path>"` and it is picked up again.
+- If token.pickle expires, delete it and run once interactively to log in again.
+"""
+
+[projects.rap-archive.needs]
+bins = ["python", "ffmpeg", "ffprobe"]
+files = ["main.py", "tracker.py", "client_secrets.json"]
+env = []
+
+[projects.rap-archive.tasks.install]
+cmd = "python -m pip install -r requirements.txt"
+desc = "Install Python dependencies (once per machine)"
+
+[projects.rap-archive.tasks.status]
+cmd = "python tracker.py"
+desc = "Table of every song: permission, rendered, uploaded"
+
+[projects.rap-archive.tasks.daily]
+cmd = "python main.py"
+danger = true
+desc = "Render the next song and upload it to YouTube as private"
+
+[projects.rap-archive.tasks.add-song]
+cmd = "python add_song.py"
+desc = "Add one song to the queue (interactive questions)"
+
+[projects.rap-archive.tasks.bulk-add]
+cmd = "python bulk_add_songs.py"
+desc = "Add every mp3 under songs/ to the tracker (marks them confirmed!)"
+
+[projects.rap-archive.tasks.edit-song]
+cmd = "python edit_song.py"
+desc = "Fix a song's artist, title or release date (interactive)"
+
+[projects.rap-archive.tasks.fix-path]
+cmd = '''python -c "import sys,tracker; c=tracker.get_connection(); n=c.execute('UPDATE songs SET song_file_path=?, updated_at=datetime() WHERE song_id=?', (sys.argv[2], sys.argv[1])).rowcount; c.commit(); print('updated' if n else 'no such song_id')"'''
+desc = "Point a song at its audio file: run rap-archive fix-path <song-id> \"<path>\""
+
+[projects.rap-archive.tasks.sync-preview]
+cmd = "python channel_sync.py --dry-run"
+desc = "Compare YouTube channel to songs/ folder, change nothing"
+
+[projects.rap-archive.tasks.sync]
+cmd = "python channel_sync.py"
+danger = true
+desc = "Move already-uploaded songs to songs/_already_uploaded and update tracker"
+
+[projects.rap-archive.tasks.unlock]
+cmd = "python -c \"import pathlib; p=pathlib.Path('run.lock'); print('removed' if p.exists() and not p.unlink() else 'no lock')\""
+desc = "Remove a stuck run.lock (only if NO run is actually going)"
+
+
+[projects.storm-watch]
+name = "Lebanon Storm Watch - weather app + storm alert agent"
+summary = """
+weather/index.html is a single-file app (open in any browser, no key).
+weather/agent/watch.mjs is a GitHub Actions agent that runs every 3 hours,
+scores the forecast for the places in agent/config.json, and opens a GitHub
+issue + ntfy push when a storm crosses alertLevel. Closes it when it passes.
+The agent reads its scoring logic out of index.html between the ===SHARED===,
+===ENGINE=== and ===ADVISOR=== markers, so the two never drift apart.
+"""
+repo = "https://github.com/enochwalks/lebanese-rap-archive.git"
+branch = "master"
+dir = "lebanese-rap-archive"
+subdir = "weather"
+runs_on = "GitHub Actions (.github/workflows/storm-watch.yml) - no PC needed"
+schedule = "Every 3 hours UTC (cron 0 */3 * * *) + manual Run workflow"
+depends_on = []
+feeds = []
+logs = []
+secrets = ["None. Uses the repo's own GITHUB_TOKEN. ntfy topic is in agent/config.json."]
+claude_touchpoints = ["None. Data is Open-Meteo + RainViewer, both free, no key."]
+notes = """
+- GitHub pauses scheduled workflows after ~60 days with no repo activity.
+  If alerts stop: Actions -> Storm watch -> Run workflow, once.
+- Tune places / alertLevel (3 Warning, 4 Severe) in weather/agent/config.json only.
+- Phone push: subscribe to the ntfyTopic from config.json in the ntfy app.
+- Not official warnings. Civil Defence is 125.
+"""
+
+[projects.storm-watch.needs]
+bins = ["node"]
+files = ["index.html", "agent/watch.mjs", "agent/config.json"]
+env = []
+
+[projects.storm-watch.tasks.dry-run]
+cmd = "node agent/watch.mjs"
+env = { DRY_RUN = "1" }
+desc = "Check the forecast now and print the alert it WOULD open"
+
+[projects.storm-watch.tasks.drill]
+cmd = "node agent/watch.mjs"
+env = { DRY_RUN = "1", ALERT_LEVEL = "1", HORIZON_HOURS = "240" }
+desc = "Drill: alert on anything in the next 10 days (prints only)"
+
+[projects.storm-watch.tasks.open-app]
+cmd = "python -c \"import webbrowser,pathlib; webbrowser.open(pathlib.Path('index.html').resolve().as_uri())\""
+desc = "Open the weather app in the browser"
+
+[projects.storm-watch.tasks.cloud-run]
+manual = "github.com/enochwalks/lebanese-rap-archive -> Actions -> Storm watch -> Run workflow (leave inputs empty for a normal run, alert_level=1 for a drill)"
+desc = "Trigger the real cloud agent / revive a paused schedule"
+
+
+[projects.sigfilter]
+name = "sigfilter - Telegram trading signal filter"
+summary = """
+Reads the Telegram signal channels the owner is in, parses each post into a
+trade, dedupes copy-pasted relays, scores it (trust, completeness, R:R,
+consensus, discipline, freshness) and forwards only what passes the gate to
+Saved Messages / a channel / ntfy. Grades outcomes against real prices
+(MT5 -> Binance -> Yahoo) so channel trust is earned. Dashboard on
+http://127.0.0.1:8765.
+"""
+repo = "https://github.com/enochwalks/lebanese-rap-archive.git"
+branch = "claude/nifty-pasteur-rcppo9"
+dir = "lra-signals"
+subdir = "signals"
+runs_on = "Windows PC (scheduled task) OR Android phone (Termux) OR GitHub Actions poll - ONLY ONE AT A TIME"
+schedule = "Always on (watch). Cloud option: every 10 min (signal-filter.yml, poll mode)"
+depends_on = []
+feeds = []
+logs = []
+secrets = [".env: TG_API_ID, TG_API_HASH, TG_SESSION, NTFY_TOPIC, ANTHROPIC_API_KEY (optional)", "repo secrets for the Actions option: TG_API_ID, TG_API_HASH, TG_SESSION", "signals.db (trust history - back it up)"]
+claude_touchpoints = ["config.yaml llm_fallback (off by default): unparseable posts go to Claude. If Claude is unavailable keep enabled: false - strict regex parsing still works."]
+notes = """
+- Never run the agent in two places on one Telegram account: every signal arrives twice.
+  Moving hosts: stop the old one first (PC: .\\install-task.ps1 -Remove).
+- Week one is near-silent by design (all channels start at 0.5 trust).
+  Start min_score 60, raise to 70-75 after stats show real records.
+- `check` is the health check. Run it first when something seems wrong.
+- Not financial advice; paper-trade the output before risking money.
+- Code is on branch claude/nifty-pasteur-rcppo9 (not merged to master).
+"""
+
+[projects.sigfilter.needs]
+bins = ["python"]
+files = ["sigfilter/cli.py", ".env", "config.yaml"]
+env = []
+
+[projects.sigfilter.tasks.setup]
+cmd = "python -m pip install -r requirements.txt"
+cmd_windows = "powershell -ExecutionPolicy Bypass -File setup.ps1"
+desc = "Virtual env + dependencies + config files (once)"
+
+[projects.sigfilter.tasks.check]
+cmd = "python -m sigfilter.cli check"
+desc = "Health check: is everything working?"
+
+[projects.sigfilter.tasks.login]
+cmd = "python -m sigfilter.cli login"
+desc = "One-time Telegram login (interactive)"
+
+[projects.sigfilter.tasks.pick]
+cmd = "python -m sigfilter.cli pick"
+desc = "Choose which channels to filter (rewrites sources: in config.yaml)"
+
+[projects.sigfilter.tasks.watch]
+cmd = "python -m sigfilter.cli watch"
+danger = true
+desc = "Run the live filter forever (forwards signals). Stop other hosts first!"
+
+[projects.sigfilter.tasks.poll]
+cmd = "python -m sigfilter.cli poll"
+danger = true
+desc = "Process new messages once and exit"
+
+[projects.sigfilter.tasks.stats]
+cmd = "python -m sigfilter.cli stats"
+desc = "Per-channel hit rate and trust"
+
+[projects.sigfilter.tasks.recent]
+cmd = "python -m sigfilter.cli recent"
+desc = "Last scored signals and why they passed or failed"
+
+[projects.sigfilter.tasks.backfill]
+cmd = "python -m sigfilter.cli backfill"
+desc = "Grade recent history to build channel trust (never forwards)"
+
+[projects.sigfilter.tasks.dashboard]
+cmd = "python -m sigfilter.cli dashboard"
+desc = "Open the live dashboard (127.0.0.1:8765)"
+
+[projects.sigfilter.tasks.testsend]
+cmd = "python -m sigfilter.cli testsend"
+danger = true
+desc = "Send a sample signal to Telegram + ntfy to test delivery"
+
+[projects.sigfilter.tasks.tests]
+cmd = "python -m pytest -q tests"
+desc = "Run the test suite"
+
+
+[projects.edit-engine]
+name = "edit_engine - frame-accurate video editing engine"
+summary = """
+General version of video_builder.py: a cut is a timeline (data) you can
+inspect, undo, export as an EDL for Resolve/Premiere, and render in one
+ffmpeg pass. engine_video_builder.py is an opt-in drop-in for main.py
+(styles "clips" and "kenburns" only; "combo"/"visualizer" stay on
+video_builder.py).
+"""
+repo = "https://github.com/enochwalks/lebanese-rap-archive.git"
+branch = "claude/video-editing-engine-5psfw3"
+dir = "lra-edit-engine"
+subdir = ""
+runs_on = "Owner's PC, as a library used by the rap-archive pipeline"
+schedule = "Not scheduled. Used when main.py imports it."
+depends_on = []
+feeds = ["rap-archive"]
+logs = []
+secrets = ["ANTHROPIC_API_KEY (optional, for vision)"]
+claude_touchpoints = ["edit_engine/analysis/vision.py: Claude looks at footage to direct the edit. Without a key it falls back to measurement (motion, exposure, music energy) automatically."]
+notes = """
+- Needs only ffmpeg/ffprobe + standard library. librosa optional (beats).
+- Opt-in only: main.py uses video_builder.py unless someone switches the import.
+- Code is on branch claude/video-editing-engine-5psfw3 (not merged to master).
+"""
+
+[projects.edit-engine.needs]
+bins = ["python", "ffmpeg", "ffprobe"]
+files = ["edit_engine/__init__.py", "engine_video_builder.py"]
+env = []
+
+[projects.edit-engine.tasks.install-dev]
+cmd = "python -m pip install -r requirements-dev.txt"
+desc = "Install test tooling (pytest)"
+
+[projects.edit-engine.tasks.tests]
+cmd = "python -m pytest -q tests"
+desc = "Run the engine's test suite"
+
+
+# ---------------------------------------------------------------------------
+# Projects the shadow has NOT seen yet. Add them (shadow.py scan <folder>
+# prints a ready-made block to paste here):
+#   - The YouTube Shorts channel bot (separate Google account, mentioned in
+#     the rap-archive README, not in this repository).
+#   - Anything else Claude runs for you.
+# ---------------------------------------------------------------------------
