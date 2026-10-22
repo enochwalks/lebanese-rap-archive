@@ -6,13 +6,27 @@ A 3D map of the PS Lab floor in Bouar. Every machine is on the map. Click a mach
 
 Copy the whole `ps-lab` folder to the PC, keeping the `vendor` folder next to `index.html`. Then double-click `index.html` to open it in Chrome or Edge. It needs no installation and no internet. Internet is only used by the AI assistant.
 
-## First-time setup (about 30 minutes)
+## What is already in it
 
-1. **Building & floor plan**: load the picture of the floor (from the `work` folder on the Desktop) and type the real width of the hall in metres.
-2. **Backup → Delete all example machines**.
-3. **+ Add machine** for each real machine. Pick the closest type (injection moulding, press, CNC, compressor, pump, conveyor, mixer, oven, generator, other). The type sets the 3D model and a starting list of parts and service tasks.
-4. **Edit layout**: drag each machine onto its real place on the floor picture. Use ⟳ Rotate in the machine's panel to turn it.
-5. Open each machine and correct the **Oil & service** intervals from the manufacturer's manual. The default intervals are only suggestions. Also write the oil type and quantity in the task notes.
+The PS Lab floor has a CNC hall (concrete columns) and a workshop room (white steel beams). It holds the 11 Gildemeister CNC machines, modelled from the photos:
+
+| Machines | Code on the map |
+|---|---|
+| 4 × CTX 310 graziano | CTX310-1 … CTX310-4 |
+| 2 × CTX 420 linear | CTX420-1, CTX420-2 |
+| CTX beta 850, CTX beta 1250 | BETA-850, BETA-1250 |
+| 2 × GMX 250 linear | GMX-1, GMX-2 |
+| LNIX | LNIX |
+
+Each machine is built from its real parts, and you can click every one of them in 3D. These include the main spindle and chuck, turret, tailstock or counter-spindle, axes, sliding door and safety window, CNC panel, hydraulic unit, central lubrication, air unit, coolant tank, chip conveyor and bin, electrical cabinet and filter mats, and the signal tower. The linear machines also have a cooling unit, and the GMX has the B-axis milling spindle and the mist extractor. Each machine also has the usual CNC-lathe service list: way oil, coolant, chuck grease, cabinet filters, hydraulic oil and filter, and so on.
+
+## First-time setup
+
+1. **Edit layout**: drag each machine to its exact place. The first layout is a guess from the photos.
+2. Open each machine and press **▶ Start counting all from today** in **Oil & service** if you don't know the old service dates. Otherwise enter the real dates with **Edit**.
+3. Check the intervals and oil types against each machine's manual and lubrication plate. The defaults are typical values, not the manufacturer's numbers.
+4. Optional: **📷 Add photo** on each machine, and fill in the serial number and year from the name plate.
+5. To track the conventional lathes and milling machines in the workshop too, use **+ Add machine** with the "Conventional lathe" or "Milling machine" type.
 
 ## Daily use
 
