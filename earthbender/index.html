@@ -811,7 +811,9 @@ for (let i = 0; i < 3; i++) { const l = new THREE.PointLight('#ffffff', 0, 28, 2
 let flashIdx = 0;
 function flashAt(p, color, amt = 1, decay = 3.2, range = 28) {
   const f = flashPool[flashIdx++ % flashPool.length];
-  f.l.position.set(p.x, p.y + 2.6, p.z); f.l.color.set(color); f.l.distance = range;     // lifted clear of bodies: no near-field blow-out
+  // Lifted clear of bodies, and higher for big blasts (their fireball is big), so the ground right under
+  // the light is not blown out. Intensity is also capped by distance to the camera (see simulate).
+  f.l.position.set(p.x, p.y + clamp(range * 0.1, 2.6, 8), p.z); f.l.color.set(color); f.l.distance = range;
   f.amt = Math.max(amt, 0.01); f.decay = decay;
 }
 const orbLight = new THREE.PointLight('#8affb0', 0, 16, 2);       // follows held boulders, ball lightning, black holes
@@ -5515,7 +5517,9 @@ function simulate(dt, realDt) {
   for (let i = screenWaves.length - 1; i >= 0; i--) { screenWaves[i].t += dt; if (screenWaves[i].t > screenWaves[i].life) screenWaves.splice(i, 1); }
   updateMood(dt);
   updateAura(dt);
-  for (const f of flashPool) { f.amt = Math.max(0, f.amt - dt * f.decay); f.l.intensity = Math.min(f.amt * f.amt * 650, 2600); }
+  // A flash next to the camera lights everything in view (self-centred ultimates sit ~9 m away), which blew the
+  // frame out to white; capping by distance² keeps its near field readable and leaves distant flashes as they were.
+  for (const f of flashPool) { f.amt = Math.max(0, f.amt - dt * f.decay); f.l.intensity = Math.min(f.amt * f.amt * 650, 2600, Math.max(250, 9 * f.l.position.distanceToSquared(camera.position))); }
   orbLight.intensity = damp(orbLight.intensity, Math.min(orbTarget, 400), 12, dt); orbTarget = 0;
   for (const F of FIGHTERS) {
     for (const r of Object.values(F.rigs)) if (r !== F.rig) r.root.visible = false;
