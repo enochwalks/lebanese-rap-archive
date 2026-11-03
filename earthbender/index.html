@@ -6080,7 +6080,7 @@ frame();
 window.stonefist = {
   cam, aim: () => player.aim, dummies, pillars, boulders, projectiles, fx, CHARS, FIGHTERS, AI, MATCH,
   get player() { return player; },
-  startGame, switchChar, applyQuality, NET, startOnline, aiReport, staticColliders, ARENA_R,
+  startGame, switchChar, applyQuality, NET, startOnline, aiReport, staticColliders, ARENA_R, netPeers, netDriveRemote,
   cast(slot) { return tryCast(player, slot); }, release(slot) { releaseCast(player, slot); },
   setUlt(v) { player.ult = v; },
   step(seconds, dt = 1 / 60) { for (let t = 0; t < seconds; t += dt) simulate(dt, dt); },
