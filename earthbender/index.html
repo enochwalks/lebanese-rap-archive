@@ -17,7 +17,7 @@
   Bots run a small learning AI: tabular Q-learning (rewarded for damage, kills and round wins)
   plus imitation of the moves you make in each situation. Its memory is kept in this browser.
 
-  Controls: WASD move · Shift tap = dodge (i-frames), hold = sprint · Space jump / double jump
+  Controls: WASD move · Shift tap = dodge (i-frames), hold = sprint · Space jump / double jump / wall jump · C slide
             Mouse look · 1–8 switch fighter (Training) · G graphics quality · M mute · Esc pause
 
   Rendering: PBR + sky image-based lighting, soft sun shadows, exponential height fog with sun
@@ -215,6 +215,22 @@
   .modes button:hover, .modes button:focus-visible { color: var(--ink); border-color: var(--ink-dim); outline: none; }
   .modes button[aria-pressed="true"] { color: #120c08; background: #e4ad62; border-color: #e4ad62; box-shadow: 0 0 26px -6px #e4ad62; }
   #modeNote { margin: 10px 0 0; font-size: 13px; color: var(--ink-dim); }
+  #onlineRow { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 18px; margin-top: 14px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  #onlineRow[hidden] { display: none; }
+  #onlineRow label { display: flex; align-items: center; gap: 8px; }
+  #onlineRow input, #onlineRow select { font: 500 14px/1 var(--body); letter-spacing: .04em; text-transform: none; color: var(--ink); background: rgba(255,255,255,.06);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 9.5em; }
+  #onlineRow select { width: auto; }
+  #onlineRow input:focus-visible, #onlineRow select:focus-visible { outline: none; border-color: var(--ink-dim); }
+  #netStatus { left: 50%; top: calc(86px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink); background: rgba(10,8,14,.55); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; white-space: nowrap; pointer-events: none; }
+  #netStatus[hidden] { display: none; }
+  #aiReport { margin: 12px auto 0; max-width: 760px; text-align: left; font-size: 13px; line-height: 1.55; color: var(--ink-dim);
+    background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+  #aiReport[hidden] { display: none; }
+  #aiReport h4 { margin: 8px 0 2px; font: 600 11px/1.3 var(--body); letter-spacing: .16em; text-transform: uppercase; color: var(--ink); }
+  #aiReport ul { margin: 0; padding-left: 18px; }
+  #aiReport b { color: var(--ink); font-weight: 600; }
   #cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
   .fc { --c: #fff; cursor: pointer; padding: 14px 13px 12px; border: 1px solid var(--line); border-top: 3px solid var(--c); border-radius: 8px;
         background: rgba(16,11,8,.66); transition: transform .15s, border-color .15s, box-shadow .15s; font: inherit; color: inherit; text-align: left; min-width: 0;
@@ -278,6 +294,7 @@
 <div class="hud" id="big"></div>
 <div class="hud" id="ultName"></div>
 <div class="hud" id="toast"></div>
+<div class="hud" id="netStatus" hidden></div>
 <div class="hud" id="castName"></div>
 <div class="hud" id="myhp">
   <div class="row"><span id="myName">Stonefist</span><b id="myHpTxt">1300</b><span class="pips" id="pips"><i></i><i></i></span></div>
@@ -295,11 +312,18 @@
       <button type="button" id="mode-duel" data-mode="duel" aria-pressed="false">Duel 1v1</button>
       <button type="button" id="mode-duo" data-mode="duo" aria-pressed="false">Team 2v2</button>
       <button type="button" id="mode-trio" data-mode="trio" aria-pressed="false">Team 3v3</button>
+      <button type="button" id="mode-online" data-mode="online" aria-pressed="false">Online PvP</button>
+    </div>
+    <div id="onlineRow" hidden>
+      <label>Match code <input id="netCode" maxlength="12" value="1" autocomplete="off" spellcheck="false"></label>
+      <label>Teams <select id="netSize"><option value="1">1v1</option><option value="2">2v2</option><option value="3">3v3</option></select></label>
+      <label>Name <input id="netNick" maxlength="16" autocomplete="off" spellcheck="false"></label>
     </div>
     <p id="modeNote">Shatter stone constructs and try every ability. Switch fighters with 1–8.</p>
     <div id="cards"></div>
     <div id="aiPanel"></div>
-    <p class="fine" id="overlayFine">Click a fighter to start. Shift: tap to dodge, hold to sprint. Space twice for a double jump.<br>
+    <div id="aiReport" hidden></div>
+    <p class="fine" id="overlayFine">Click a fighter to start. Shift: tap to dodge, hold to sprint. Space twice for a double jump, Space against a wall to wall-jump, C to slide.<br>
       Keyboard and mouse required. G changes graphics quality, M mutes sound, Esc pauses.</p>
   </div>
 </div>
@@ -2058,7 +2082,11 @@ function animateRig(F, dt, time) {
   const rig = F.rig;
   if (!rig) return;
   const P = computePose(F, time);
-  const rate = F.action || F.dodge ? 24 : 14;
+  if (F.slide) {                                   // slide: low, leaning back, lead leg out front
+    Object.assign(P, { hipY: 0.5, lean: -0.5, roll: 0, headX: 0.3, lTh: -1.35, lKn: 0.15, rTh: -0.35, rKn: 1.75, stance: 0.08 });
+    if (!F.action) Object.assign(P, { twist: 0, lUp: -0.5, lUpZ: 0.5, rUp: 0.6, rUpZ: -0.7, lEl: -0.4, rEl: -0.6 });   // casting keeps its arms
+  }
+  const rate = F.action || F.dodge || F.slide ? 24 : 14;
   const C = F.pose;
   for (const k of POSE_KEYS) C[k] = damp(C[k], P[k], rate, dt);
   rig.hips.position.y = C.hipY;
@@ -2647,6 +2675,10 @@ function hurt(d, amt, o = {}) {
   if (!d || !d.alive || d.rising) return 0;
   const src = o.src || null;
   if (src && !isHostile(src, d)) return 0;                       // no friendly fire
+  if (NET.on && d.isFighter) {                                   // online: the attacker's client decides, the victim applies
+    if (d.isRemote) return src && !src.isRemote && !o.net ? netHurtRemote(d, amt, o) : 0;
+    if (src && src.isRemote && !o.net) return 0;
+  }
   if (d.isFighter && d.iframes > 0) {                            // dodged!
     if (!o.quiet && (d.isHuman || src?.isHuman)) floatText(centerOf(d), 'dodged', '#ffffff', 'miss');
     d.dodgedHits = (d.dodgedHits || 0) + 1;
@@ -4469,6 +4501,7 @@ dummies.push(buildDummy(7, true));
    37. HUD
    ===================================================================== */
 const $ = (id) => document.getElementById(id);
+let aiSyncReady = false;     // set once the AI-report sync (section 46) is defined
 const crossEl = $('cross'), bannerEl = $('banner'), bigEl = $('big'), castNameEl = $('castName'), ultNameEl = $('ultName'), toastEl = $('toast');
 const abilitiesEl = $('abilities'), keysEl = $('keys'), rosterEl = $('roster'), heroLine = $('heroLine'), comboEl = $('combo'), comboN = $('comboN');
 const qualityLabel = $('qualityLabel'), overlay = $('overlay'), cardsEl = $('cards'), overlayFine = $('overlayFine'), overlayTag = $('overlayTag');
@@ -4568,7 +4601,8 @@ class Fighter {
     this.slam = null; this.dash = null; this.grapple = null; this.glide = 0; this.wingsT = 0; this.levitate = 0; this.levHeight = 3;
     this.channel = null; this.spin = 0; this.spinAngle = 0; this.leapT = 0; this.moving = false;
     this.flipT = 0; this.landT = 0; this.knockT = 0; this.iframes = 0; this.dodge = null; this.dodgeCharges = 2; this.dodgeRecharge = 0; this.trail = []; this.trailT = 0;
-    this.input = { move: new V3(), sprint: false, jump: false, jumpHeld: false, dodge: false };
+    this.input = { move: new V3(), sprint: false, jump: false, jumpHeld: false, dodge: false, slide: false };
+    this.slide = null; this.slideCd = 0; this.wallN = new V3(); this.wallT = 0; this.wallTop = 0; this.mantleCd = 0; this.mantleT = 0; this.climbs = 0; this.isRemote = false; this.net = null;
     this.aim = { origin: new V3(), dir: new V3(0, 0, -1), yaw: 0, pitch: 0, hit: false, point: new V3(), far: new V3(0, 0, -50) };
     this.cds = [0, 0, 0, 0, 0, 0]; this.ult = 40; this.ultT = 0; this.castT = 9; this.lastCastTag = ''; this.lastCastSlot = -1; this.threatT = 0; this.threatDir = new V3();
     this.r = 0.55; this.h = 1.95; this.mass = 1.3;
@@ -4630,7 +4664,7 @@ class Fighter {
     this.alive = true; this.hp = this.maxHp; this.pos.copy(spawn); this.vel.set(0, 0, 0); this.onGround = true;
     this.facing = faceYaw + PI; this.aim.yaw = faceYaw;
     this.stun = this.mark = this.burn = this.bound = this.slowT = this.knockT = this.iframes = this.stunImmune = 0;
-    this.held = null; this.dash = null; this.grapple = null; this.dodge = null; this.slam = null; this.glide = 0; this.levitate = 0; this.spin = 0; this.wingsT = 0;
+    this.held = null; this.dash = null; this.grapple = null; this.dodge = null; this.slam = null; this.glide = 0; this.levitate = 0; this.spin = 0; this.wingsT = 0; this.slide = null; this.wallT = 0;
     this.hidden = false; this.hiddenT = 0; this.action = null; this.flipT = 0; this.landT = 0;
     this.cds.fill(0); this.ult = Math.max(35, this.ult * 0.6); this.dodgeCharges = 2;
     this.rDealt = this.rTaken = this.rEvents = 0;
@@ -4650,13 +4684,13 @@ function collideFighter(F) {
   const push = (cx, cz, rad, top) => {
     if (F.pos.y > top - 0.35) return;
     const dx = F.pos.x - cx, dz = F.pos.z - cz, d = Math.hypot(dx, dz), m = rad + F.r * 0.75;
-    if (d < m) { F.pos.x = cx + (dx / (d || 1)) * m; F.pos.z = cz + (dz / (d || 1)) * m; }
+    if (d < m) { F.pos.x = cx + (dx / (d || 1)) * m; F.pos.z = cz + (dz / (d || 1)) * m; F.wallT = 0.16; F.wallN.set(dx / (d || 1), 0, dz / (d || 1)); F.wallTop = top; }
   };
   for (const p of pillars) if (p.state !== 'dead' && !(p.ignorePlayerT > 0 && p.src === F)) push(p.x, p.z, p.radius * 0.92, p.mesh.position.y + p.H * 0.97);
   for (const d of dummies) if (d.alive && !d.rising) push(d.pos.x, d.pos.z, d.r, d.pos.y + d.h);
   for (const c of staticColliders) push(c.x, c.z, c.r * 0.8, c.top);
   const rr = Math.hypot(F.pos.x, F.pos.z);
-  if (rr > ARENA_R) { F.pos.x *= ARENA_R / rr; F.pos.z *= ARENA_R / rr; }
+  if (rr > ARENA_R) { F.pos.x *= ARENA_R / rr; F.pos.z *= ARENA_R / rr; F.wallT = 0.16; F.wallN.set(-F.pos.x / ARENA_R, 0, -F.pos.z / ARENA_R); F.wallTop = 99; }
 }
 function separateFighters() {
   for (let i = 0; i < FIGHTERS.length; i++) for (let j = i + 1; j < FIGHTERS.length; j++) {
@@ -4666,10 +4700,21 @@ function separateFighters() {
     if (d < m && d > 1e-4) { const k = (m - d) * 0.5 / d; a.pos.x += dx * k; a.pos.z += dz * k; b.pos.x -= dx * k; b.pos.z -= dz * k; }
   }
 }
+function startSlide(F) {
+  const hs = Math.hypot(F.vel.x, F.vel.z);
+  F.slide = { t: 0, dur: 0.62, dir: new V3(F.vel.x / hs, 0, F.vel.z / hs), v0: Math.min(21, Math.max(hs, 9) * 1.55) };
+  F.slideCd = 0.5;
+  if (F.channel) stopChannel(F);
+  dustRing(_c2.copy(F.pos), 8, 3, 0.7, 0.6);
+  if (F.isHuman) fovKick = Math.max(fovKick, 4);
+  Sfx.whoosh();
+}
 function startDodge(F) {
   const m = F.input.move.lengthSq() > 0.01 ? F.input.move.clone().setY(0).normalize() : F.fwd().multiplyScalar(-1);
   F.dodge = { dir: m, t: 0, dur: 0.24, local: m.x * Math.sin(F.facing) + m.z * Math.cos(F.facing) };
   F.iframes = 0.24; F.dodgeCharges--; if (F.dodgeRecharge <= 0) F.dodgeRecharge = 1.35;
+  if (F.action && F.action.type !== 'beam' && !(F.action.type === 'lift' && F.liftBoulder)) F.action = null;   // dodge cancels a cast's recovery
+  F.slide = null;
   if (F.channel) stopChannel(F);
   F.trail.length = 0; F.trailT = 0.35;
   dustRing(_c2.copy(F.pos), 10, 4, 0.8, 0.6);
@@ -4695,12 +4740,12 @@ function updateFighter(F, dt) {
   if (!F.alive) return;
   const I = F.input;
   if (F.hiddenT > 0) { F.hiddenT -= dt; if (F.hiddenT <= 0) F.hidden = false; }
-  F.iframes = Math.max(0, F.iframes - dt); F.knockT -= dt; F.stunImmune -= dt; F.flipT -= dt; F.landT -= dt; F.wingsT -= dt; F.ultT -= dt; F.hurtT -= dt; F.trailT -= dt;
+  F.iframes = Math.max(0, F.iframes - dt); F.wallT -= dt; F.slideCd -= dt; F.mantleCd -= dt; F.knockT -= dt; F.stunImmune -= dt; F.flipT -= dt; F.landT -= dt; F.wingsT -= dt; F.ultT -= dt; F.hurtT -= dt; F.trailT -= dt;
   if (F.stun > 0) { F.stun -= dt; if (F.stun <= 0) F.stunImmune = 1.0; }
   F.mark = Math.max(0, F.mark - dt); F.bound = Math.max(0, F.bound - dt); F.slowT = Math.max(0, F.slowT - dt);
   if (F.burn > 0) {
     F.burn -= dt; F.burnTick -= dt;
-    if (F.burnTick <= 0) { F.burnTick = 0.45; hurt(F, 5, { src: F.lastSrc && F.lastSrc.alive ? F.lastSrc : null, element: F.lastEl === 'fire' ? 'fire' : 'light', quiet: true }); if (!F.alive) return; }
+    if (F.burnTick <= 0) { F.burnTick = 0.45; hurt(F, 5, { src: F.lastSrc && F.lastSrc.alive ? F.lastSrc : null, element: F.lastEl === 'fire' ? 'fire' : 'light', quiet: true, net: true }); if (!F.alive) return; }
     if (Math.random() < 0.4) flame(F.pos.x + rand(-0.4, 0.4), F.pos.y + rand(0.3, 1.8), F.pos.z + rand(-0.4, 0.4), 0, rand(1, 2), 0, rand(0.2, 0.35), 0.5);
   }
   if (F.dodgeCharges < 2) { F.dodgeRecharge -= dt; if (F.dodgeRecharge <= 0) { F.dodgeCharges++; F.dodgeRecharge = F.dodgeCharges < 2 ? 1.35 : 0; } }
@@ -4756,6 +4801,8 @@ function updateFighter(F, dt) {
   if (I.dodge && canAct && !F.dodge && F.dodgeCharges > 0 && !F.slam && F.bound <= 0 && F.knockT < 0.2) startDodge(F);
   I.dodge = false;
   if (F.dodge) { updateDodge(F, dt); return; }
+  if (I.slide && canAct && F.onGround && !F.slide && F.slideCd <= 0 && F.bound <= 0 && Math.hypot(F.vel.x, F.vel.z) > 5.5) startSlide(F);
+  I.slide = false;
 
   const mv = canAct && F.bound <= 0 && F.knockT < 0.15 ? I.move : _zero;
   F.moving = mv.lengthSq() > 0.01;
@@ -4765,21 +4812,57 @@ function updateFighter(F, dt) {
   if (F.glide > 0) speed = 17;
   const wx = mv.x * speed, wz = mv.z * speed;
   const accelerating = wx * wx + wz * wz > F.vel.x * F.vel.x + F.vel.z * F.vel.z;
-  const accel = F.knockT > 0 ? 1.5 : F.onGround ? (accelerating ? 15 : 19) : (F.glide > 0 ? 6 : 5.5);
-  F.vel.x = damp(F.vel.x, wx, accel, dt);
-  F.vel.z = damp(F.vel.z, wz, accel, dt);
+  const reversing = F.moving && wx * F.vel.x + wz * F.vel.z < -0.3 * Math.hypot(wx, wz) * Math.hypot(F.vel.x, F.vel.z);
+  const accel = F.knockT > 0 ? 1.5 : F.onGround ? (reversing ? 30 : accelerating ? 17 : 21) : (F.glide > 0 ? 6 : 7.5);
+  if (F.mantleT > 0) { F.mantleT -= dt; }
+  else if (F.slide) {                                        // slide: keeps momentum, steers a little, bleeds speed
+    const S = F.slide; S.t += dt;
+    if (F.moving) { S.dir.lerp(_c2.set(mv.x, 0, mv.z), 1 - Math.exp(-2.2 * dt)).normalize(); }
+    const k = Math.min(1, S.t / S.dur), sp = lerp(S.v0, 8, k * k);          // holds its burst, then bleeds off
+    F.vel.x = S.dir.x * sp; F.vel.z = S.dir.z * sp;
+    if (F.onGround && Math.random() < 0.7) dust(F.pos.x, F.pos.y + 0.1, F.pos.z, -F.vel.x * 0.06, rand(0.3, 0.9), -F.vel.z * 0.06, rand(0.5, 0.9), 0.6, 0.45);
+    if (S.t >= S.dur || !canAct) F.slide = null;
+  } else if (!F.onGround && F.knockT <= 0 && F.glide <= 0 && F.moving && Math.hypot(F.vel.x, F.vel.z) > speed && wx * F.vel.x + wz * F.vel.z > 0) {
+    // air momentum: extra speed (slide-jumps, wall kicks, dashes) is kept and steered, not braked
+    const hv = Math.hypot(F.vel.x, F.vel.z), keep = hv * (1 - 0.35 * dt), a = 1 - Math.exp(-4 * dt);
+    const dx = lerp(F.vel.x / hv, mv.x, a), dz = lerp(F.vel.z / hv, mv.z, a), dl = Math.hypot(dx, dz) || 1;
+    F.vel.x = (dx / dl) * keep; F.vel.z = (dz / dl) * keep;
+  } else {
+    F.vel.x = damp(F.vel.x, wx, accel, dt);
+    F.vel.z = damp(F.vel.z, wz, accel, dt);
+  }
   if (I.jump) { F.jumpBuf = 0.14; I.jump = false; }
   F.jumpBuf -= dt; F.coyote -= dt;
   if (F.jumpBuf > 0 && canAct && F.bound <= 0) {
     if (F.onGround || F.coyote > 0) {
       F.vel.y = 12.5; F.onGround = false; F.coyote = 0; F.jumpBuf = 0; F.jumpCut = true;
+      if (F.slide) { F.vel.x *= 1.12; F.vel.z *= 1.12; F.vel.y = 11; F.slide = null; F.leapT = 0.1; }   // slide-jump: a long, low leap
       dustRing(_c2.copy(F.pos), 10, 3.5, 0.8, 0.8);
+    } else if (F.wallT > 0 && !F.slam && F.pos.y < F.wallTop - 0.3 && (F.climbs < 2 || !(F.moving && mv.x * F.wallN.x + mv.z * F.wallN.z < -0.5))) {
+      const n = F.wallN;
+      if (F.moving && mv.x * n.x + mv.z * n.z < -0.5) {   // holding into the wall: climb kick straight up it (twice per jump)
+        F.vel.set(-n.x * 1.5, 12.5, -n.z * 1.5); F.climbs++;
+      } else {                                            // otherwise: wall jump, kicking off pillars, rocks and the arena edge
+        const side = F.moving ? 4 : 0;
+        F.vel.set(n.x * 10.5 + mv.x * side, 12.5, n.z * 10.5 + mv.z * side); F.flipT = 0.42;
+        F.facing = Math.atan2(F.vel.x, F.vel.z);
+      }
+      F.wallT = 0; F.jumpBuf = 0; F.jumpCut = true; F.airJumps = Math.max(F.airJumps, 1);
+      sparks(F.pos.clone().setY(F.pos.y + 1), 14, 4, F.elem.glow, 0.4); dust(F.pos.x - n.x * 0.4, F.pos.y + 1, F.pos.z - n.z * 0.4, n.x * 2, 1, n.z * 2, 1, 0.6, 0.5); Sfx.whoosh();
     } else if (F.airJumps > 0 && !F.slam) {
       F.vel.y = 11.5; F.airJumps--; F.jumpBuf = 0; F.flipT = 0.42; F.jumpCut = true;
       spawnRing(F.pos, 2.2, F.elem.glow, 0.35, { y: 0.2 }); sparks(F.pos, 12, 4, F.elem.glow, 0.5); Sfx.whoosh();
     }
   }
-  if (F.jumpCut && !I.jumpHeld && F.vel.y > 3) { F.vel.y *= 0.72; F.jumpCut = false; }   // short hop (about half height) when Space is released early
+  if (F.jumpCut && !I.jumpHeld && F.vel.y > 3) { F.vel.y *= 0.72; F.jumpCut = false; }
+  if (!F.onGround && F.wallT > 0 && F.mantleCd <= 0 && F.moving && F.vel.y < 7 && mv.x * F.wallN.x + mv.z * F.wallN.z < -0.5) {
+    const up = F.wallTop - F.pos.y;
+    if (up > 0.2 && up < 2.4) {                        // mantle: pull up onto rocks and pillars like a climb
+      F.vel.y = Math.sqrt(2 * 30 * (up + 0.45)); F.mantleCd = 0.45; F.jumpCut = false;
+      F.vel.x = -F.wallN.x * 3.2; F.vel.z = -F.wallN.z * 3.2; F.mantleT = 0.35;
+      dust(F.pos.x - F.wallN.x * 0.5, F.pos.y + 1.2, F.pos.z - F.wallN.z * 0.5, 0, 0.5, 0, 0.7, 0.5, 0.45);
+    }
+  }
   if (F.vel.y <= 0) F.jumpCut = false;
   let g = F.vel.y > 0 ? 30 : 38;
   if (F.glide > 0) { g = 9; if (F.vel.y < -3.2) F.vel.y = damp(F.vel.y, -3.2, 8, dt); }
@@ -4823,7 +4906,7 @@ function updateFighter(F, dt) {
   } else if (F.onGround && F.vel.y <= 0 && F.pos.y - gnd < 0.55) {
     F.pos.y = gnd; F.vel.y = 0;
   } else F.onGround = false;
-  if (F.onGround) F.airJumps = 1;
+  if (F.onGround) { F.airJumps = 1; F.climbs = 0; }
   else if (wasGround && F.vel.y <= 0.5) F.coyote = 0.12;                  // coyote time: a late jump off a ledge still counts
   if (F.glide > 0) {
     F.glide -= dt;
@@ -4848,7 +4931,7 @@ function updateFighterCommon(F, dt) {
   F.faceAimT -= dt; F.castT += dt;
   const prev = F.facing;
   if (F.spin > 0) F.facing = F.spinAngle;
-  else if (!F.dash && !F.held) {
+  else if (!F.dash && !F.held && !F.isRemote) {
     let target = F.facing;
     const act = F.action?.type;
     const combat = F.isBot && F.bot.target && F.bot.target.alive && F.pos.distanceTo(F.bot.target.pos) < 26;
@@ -4927,6 +5010,7 @@ const AI = {
     this.reset();
   },
   save() {
+    try { queueMicrotask(() => { try { syncAiReport(); } catch { /* not ready */ } }); } catch { /* ignore */ }
     try { localStorage.setItem('stonefist.ai.v1', JSON.stringify({ Q: Array.from(this.Q, (v) => Math.round(v * 1000) / 1000), N: Array.from(this.N, (v) => Math.round(v * 100) / 100), meta: this.meta })); }
     catch { /* storage blocked: the brain still learns for this session */ }
   },
@@ -5111,7 +5195,8 @@ class BotBrain {
 const MODES = { training: { size: 0, label: 'Training', note: 'Shatter stone constructs and try every ability. Switch fighters with 1–8.' },
   duel: { size: 1, label: 'Duel 1v1', note: 'One on one against the learning AI. First to 3 rounds.' },
   duo: { size: 2, label: 'Team 2v2', note: 'You and an AI ally against two AI opponents. First to 3 rounds.' },
-  trio: { size: 3, label: 'Team 3v3', note: 'You and two AI allies against three. First to 3 rounds.' } };
+  trio: { size: 3, label: 'Team 3v3', note: 'You and two AI allies against three. First to 3 rounds.' },
+  online: { size: 1, label: 'Online PvP', note: 'Real players. Everyone who enters the same match code and team size joins the same arena. First to 3 rounds.' } };
 let pendingMode = 'training';
 const spawnPoint = (team, i, n) => { const z = team === 0 ? 24 : -24, x = (i - (n - 1) / 2) * 7; return new V3(x, terrainHeight(x, z), z); };
 function clearCombat() {
@@ -5128,11 +5213,17 @@ function clearCombat() {
 function startGame(mode, charIdx) {
   Sfx.init();
   started = true; overlay.hidden = true; resultsEl.hidden = true; canvas.focus();
-  for (const F of [...FIGHTERS]) if (!F.isHuman) F.dispose();
-  MATCH.mode = mode; MATCH.training = mode === 'training'; MATCH.size = MODES[mode].size;
+  if (mode !== 'online') netLeave();
+  for (const F of [...FIGHTERS]) if (!F.isHuman && !F.isRemote) F.dispose();
+  MATCH.mode = mode; MATCH.training = mode === 'training'; MATCH.size = mode === 'online' ? NET.size : MODES[mode].size;
   player.setChar(CHARS[charIdx].id); player.team = 0;
   clearCombat();
-  if (MATCH.training) {
+  if (mode === 'online') {
+    MATCH.state = 'lobby'; MATCH.score = [0, 0]; MATCH.round = 0; MATCH.timer = 99;
+    for (const d of dummies) { d.alive = false; d.respawnT = 1e9; }
+    player.reset(spawnPoint(0, 0, 1), 0);
+    buildTeamPanels();
+  } else if (MATCH.training) {
     MATCH.state = 'free';
     player.reset(new V3(0, terrainHeight(0, 8), 8), 0);
     for (const d of dummies) { d.respawnT = rand(0, 0.6); d.alive = false; }
@@ -5208,6 +5299,7 @@ function defeatFighter(F, src) {
   else if (src?.isHuman) { banner(`${F.name} shattered`); slowmo(0.25, 0.25); }
 }
 function updateMatch(dt, realDt) {
+  if (MATCH.mode === 'online') { if (NET.on) updateOnlineMatch(dt, realDt); return; }
   if (MATCH.training) return;
   MATCH.t += realDt;
   if (MATCH.state === 'intro') { if (MATCH.t > 2.0) { MATCH.state = 'fight'; bigBanner('Fight', '', 0.9); Sfx.boom(1); } }
@@ -5332,6 +5424,7 @@ function tryCast(F, slot) {
   if (ab.ult) {
     if (F.ult < 100) { if (F.isHuman) toast(`Ultimate charging · ${Math.floor(F.ult)}%`, 1.2); return false; }
     F.ult = 0; F.castT = 0; F.lastCastTag = 'ult'; F.lastCastSlot = slot;
+    netSendCast(F, slot);
     ab.cast(F);
     if (F.isHuman) pulseSlot(slot);
     return true;
@@ -5339,16 +5432,18 @@ function tryCast(F, slot) {
   if (F.cds[slot] > 0) return false;
   if (ab.channel) {
     if (ab.start(F) === false) return false;
+    netSendCast(F, slot);
     F.castT = 0; F.lastCastTag = ab.ai.tag; F.lastCastSlot = slot;
     if (F.isHuman) { pulseSlot(slot); showCastName(ab.name); }
     return true;
   }
   if (ab.cast(F) === false) return false;
+  netSendCast(F, slot);
   F.cds[slot] = ab.cd; F.castT = 0; F.lastCastTag = ab.ai.tag; F.lastCastSlot = slot;
   if (F.isHuman) { pulseSlot(slot); showCastName(ab.name); crossEl.classList.add('fire'); fireTimer = 0.12; }
   return true;
 }
-function releaseCast(F, slot) { const ab = F.char.abilities[slot]; if (ab && ab.channel) ab.stop(F); }
+function releaseCast(F, slot) { const ab = F.char.abilities[slot]; if (ab && ab.channel) { if (F.channel) netSendRelease(F, slot); ab.stop(F); } }
 function onFighterChanged() {
   document.documentElement.style.setProperty('--accent', player.elem.hex);
   heroLine.textContent = `${player.char.name} · ${player.char.title} · ${player.char.role}`;
@@ -5376,10 +5471,13 @@ function requestLock() {
 function setMode(m) {
   pendingMode = m;
   document.querySelectorAll('.modes button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
-  modeNote.textContent = MODES[m].note;
+  modeNote.textContent = m === 'online' && !NET.api ? 'Online play connects players who open this page on claude.ai. Share it with your friends (Contributor access, so they can cast), then all pick the same match code and team size.' : MODES[m].note;
+  $('onlineRow').hidden = m !== 'online';
 }
 document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setMode(b.dataset.mode); }));
-cardsEl.addEventListener('click', (e) => { const b = e.target.closest('.fc'); if (!b) return; e.stopPropagation(); startGame(pendingMode, +b.dataset.i); });
+cardsEl.addEventListener('click', (e) => { const b = e.target.closest('.fc'); if (!b) return; e.stopPropagation(); if (pendingMode === 'online') startOnline(+b.dataset.i); else startGame(pendingMode, +b.dataset.i); });
+$('onlineRow').addEventListener('click', (e) => e.stopPropagation());
+$('onlineRow').addEventListener('keydown', (e) => e.stopPropagation());
 overlay.addEventListener('click', (e) => {
   if (e.target.closest('button') || !started || MATCH.state === 'matchEnd') return;
   overlay.hidden = true; resultsEl.hidden = true; canvas.focus(); requestLock();
@@ -5388,8 +5486,11 @@ function renderAiPanel() {
   const m = AI.meta;
   aiPanel.innerHTML = `<span>Opponent AI · <b>Level ${AI.level()}</b></span><span><b>${m.exp.toLocaleString()}</b> learning updates</span>
     <span><b>${m.humanMoves.toLocaleString()}</b> of your moves studied</span><span>Rounds vs you: <b>${m.botRoundWins}–${m.humanRoundWins}</b></span>
-    <button type="button" id="aiReset">Reset AI memory</button>`;
-  $('aiReset').onclick = (e) => { e.stopPropagation(); AI.reset(); AI.save(); renderAiPanel(); toast('AI memory cleared'); };
+    <button type="button" id="aiWhat" aria-expanded="${!$('aiReport').hidden}">What it learned</button><button type="button" id="aiReset">Reset AI memory</button>`;
+  $('aiReset').onclick = (e) => { e.stopPropagation(); AI.reset(); AI.save(); renderAiPanel(); renderAiReport(); toast('AI memory cleared'); };
+  $('aiWhat').onclick = (e) => { e.stopPropagation(); const r = $('aiReport'); r.hidden = !r.hidden; if (!r.hidden) renderAiReport(); renderAiPanel(); };
+  if (!$('aiReport').hidden) renderAiReport();
+  try { syncAiReport(); } catch { /* database not ready yet */ }
 }
 renderAiPanel();
 document.addEventListener('pointerlockchange', () => {
@@ -5405,6 +5506,8 @@ document.addEventListener('pointerlockerror', () => { lockFailed = true; overlay
 addEventListener('keydown', (e) => {
   keys[e.code] = true;
   if (e.code === 'Space') { if (!e.repeat) player.input.jump = true; e.preventDefault(); }
+  if (e.code === 'KeyC' && !e.repeat) player.input.slide = true;
+  if (e.code === 'Enter' && NET.on && MATCH.state === 'lobby' && NET.hostPeer === NET.myPeer) NET.forceStart = true;
   if (e.code.startsWith('Arrow') || e.code === 'Tab') e.preventDefault();
   if (e.repeat) return;
   if ((e.code === 'ShiftLeft' || e.code === 'ShiftRight') && started) { shiftAt = performance.now(); player.input.dodge = true; }
@@ -5507,7 +5610,8 @@ function simulate(dt, realDt) {
   else { player.input.move.set(0, 0, 0); player.input.sprint = false; }
   if (!started) cam.yaw += realDt * 0.06;           // slow attract-mode orbit behind the title card
   for (const F of FIGHTERS) if (F.isBot) F.bot.update(dt);
-  for (const F of FIGHTERS) { updateFighter(F, dt); updateFighterCommon(F, dt); tickChannel(F, dt); }
+  for (const F of FIGHTERS) { if (F.isRemote) netDriveRemote(F, dt); else updateFighter(F, dt); updateFighterCommon(F, dt); tickChannel(F, dt); }
+  netTick(dt);
   separateFighters();
   imitateT -= dt;
   if (imitateT <= 0 && !MATCH.training && MATCH.state === 'fight' && player.alive) {
@@ -5634,7 +5738,7 @@ function renderFrame(realDt) {
 function frame() {
   requestAnimationFrame(frame);
   const realDt = Math.min(clock.getDelta(), 1 / 20);
-  const paused = started && !overlay.hidden;
+  const paused = started && !overlay.hidden && !NET.on;
   if (slowT > 0) { slowT -= realDt; timeScale = slowScale; if (slowT <= 0) slowScale = 1; }
   else timeScale = damp(timeScale, 1, 9, realDt);
   if (!paused) simulate(realDt * timeScale, realDt);
@@ -5647,6 +5751,321 @@ function frame() {
     }
   }
 }
+/* =====================================================================
+   45. ONLINE PVP — real players over the claude.ai room channel
+       Each player's own client simulates their fighter and shares its state ~30x a second
+       (presence). Others see it interpolated ~110 ms behind. Casts are replayed on every
+       client for the visuals; damage is decided by the attacker's client and sent to the
+       victim, who applies it to themselves. The first player in the room runs the match.
+   ===================================================================== */
+const NET = { on: false, api: null, room: null, size: 1, code: '1', nick: 'Player', jt: 0, myPeer: null, hostPeer: null,
+  seats: [], mySeat: -1, remotes: new Map(), hits: [], presT: 0, hostT: 0, forceStart: false, kb: null, epoch: 0, lastMsgKey: '', respawnT: 0 };
+const NET_DELAY = 110;
+(async () => {
+  try { NET.api = window.claude?.use ? await window.claude.use('room') : null; } catch { NET.api = null; }
+  if (pendingMode === 'online') setMode('online');
+})();
+try { $('netNick').value = localStorage.getItem('stonefist.nick') || ''; } catch { /* storage blocked */ }
+const r2 = (v) => Math.round(v * 100) / 100;
+
+async function startOnline(charIdx) {
+  if (!NET.api) { toast('Online play works when this page is opened on claude.ai', 3.5); return; }
+  const code = ($('netCode').value || '1').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 12) || '1';
+  const size = clamp(+$('netSize').value || 1, 1, 3);
+  const nick = ($('netNick').value || '').trim().slice(0, 16) || 'Player';
+  try { localStorage.setItem('stonefist.nick', nick); } catch { /* storage blocked */ }
+  netLeave();
+  let room;
+  try { room = await NET.api.join(`pvp${size}-${code}`); }
+  catch (e) { toast(e?.code === 'not_permitted' ? 'This viewer cannot join online matches' : 'Could not join the match — try again', 3); return; }
+  Object.assign(NET, { on: true, room, size, code, nick, jt: Date.now(), seats: [], mySeat: -1, hostPeer: null, myPeer: null, forceStart: false, kb: null, lastMsgKey: '' });
+  startGame('online', charIdx);
+  room.onPeers(netPeers, () => netDropped());
+  room.on('cast', netOnCast); room.on('rel', netOnRel); room.on('hits', netOnHits); room.on('match', netOnMatch);
+  netSendPresence(true);
+}
+function netLeave() {
+  if (!NET.room) return;
+  try { NET.room.leave(); } catch { /* already gone */ }
+  for (const R of NET.remotes.values()) R.F.dispose();
+  NET.remotes.clear(); NET.room = null; NET.on = false; NET.hits.length = 0;
+  netStatusEl.hidden = true;
+}
+function netDropped() { if (!NET.on) return; toast('Lost the online match connection', 3); netLeave(); }
+const netStatusEl = $('netStatus');
+
+/* --- who is here, seats, teams, host --- */
+function netPeers(change) {
+  const room = NET.room; if (!room) return;
+  const list = change.peers.filter((p) => p.presence && p.presence.jt && p.presence.ch !== undefined)
+    .slice().sort((a, b) => a.presence.jt - b.presence.jt || (a.peer < b.peer ? -1 : 1));
+  const me = change.peers.find((p) => p.sameTab);
+  if (me) NET.myPeer = me.peer;
+  NET.seats = list.slice(0, NET.size * 2).map((p) => p.peer);
+  NET.hostPeer = NET.seats[0] || NET.myPeer;
+  const seat = NET.seats.indexOf(NET.myPeer);
+  if (seat !== NET.mySeat && seat >= 0) { NET.mySeat = seat; player.team = seat % 2; }
+  const present = new Set();
+  for (const p of list) {
+    if (p.sameTab || !NET.seats.includes(p.peer)) continue;
+    present.add(p.peer);
+    let R = NET.remotes.get(p.peer);
+    const ch = CHARS[clamp(p.presence.ch | 0, 0, CHARS.length - 1)].id;
+    if (!R || R.F.charId !== ch) {
+      if (R) R.F.dispose();
+      const F = new Fighter({ charId: ch, team: 1 });
+      F.isBot = false; F.bot = null; F.isRemote = true;
+      R = { F, buf: [], last: null, peer: p.peer, seat: 0 };
+      F.net = R; NET.remotes.set(p.peer, R);
+    }
+    R.seat = NET.seats.indexOf(p.peer); R.F.team = R.seat % 2;
+    R.F.nameEl.textContent = String(p.presence.n || 'Player').slice(0, 16);
+    R.F.el.className = 'hp ' + (R.F.team === player.team ? 'ally' : 'enemy');
+    if (p.presence !== R.last) { R.last = p.presence; R.buf.push({ t: performance.now(), s: p.presence }); if (R.buf.length > 12) R.buf.shift(); }
+  }
+  for (const [peer, R] of NET.remotes) if (!present.has(peer)) { R.F.dispose(); NET.remotes.delete(peer); }
+  if (change.joined.length || change.left.length) {
+    buildTeamPanels();
+    if (NET.hostPeer === NET.myPeer) netHostAnnounce();
+  }
+}
+const netFighter = (peer) => NET.remotes.get(peer)?.F || null;
+
+/* --- my state out, theirs in --- */
+function netSendPresence(force = false) {
+  const now = performance.now();
+  if (!force && now - NET.presT < 33) return;
+  NET.presT = now;
+  const F = player;
+  NET.room?.presence({
+    v: 1, jt: NET.jt, n: NET.nick, ch: F.charIdx, ts: Date.now(),
+    p: [r2(F.pos.x), r2(F.pos.y), r2(F.pos.z)], vl: [r2(F.vel.x), r2(F.vel.y), r2(F.vel.z)], f: r2(F.facing),
+    ay: r2(F.aim.yaw), ap: r2(F.aim.pitch), g: F.onGround ? 1 : 0, hp: Math.max(0, Math.round(F.hp)), mh: F.maxHp, al: F.alive ? 1 : 0, kb: F.alive ? null : NET.kb,
+    dg: F.dodge ? 1 : 0, sd: F.slide ? 1 : 0, fl: F.flipT > 0 ? r2(F.flipT) : 0, hd: F.hidden ? 1 : 0, gl: F.glide > 0 ? 1 : 0, wg: F.wingsT > 0 || F.glide > 0 ? 1 : 0,
+    st: F.stun > 0 ? 1 : 0, bd: F.bound > 0 ? 1 : 0
+  }).catch(() => {});
+}
+function netDriveRemote(F, dt) {
+  const R = F.net;
+  F.held = null; F.levitate = 0;
+  if (F.dash || F.grapple) { updateFighter(F, dt); return; }      // replay their own dash/grapple locally
+  const b = R.buf; if (!b.length) return;
+  const rt = performance.now() - NET_DELAY;
+  let s0 = b[0], s1 = null;
+  for (let i = b.length - 1; i >= 0; i--) if (b[i].t <= rt) { s0 = b[i]; s1 = b[i + 1] || null; break; }
+  const A = s0.s;
+  let x = A.p[0], y = A.p[1], z = A.p[2];
+  if (s1) { const k = clamp((rt - s0.t) / Math.max(1, s1.t - s0.t), 0, 1), B = s1.s; x = lerp(x, B.p[0], k); y = lerp(y, B.p[1], k); z = lerp(z, B.p[2], k); }
+  else { const ex = Math.min(0.15, Math.max(0, (rt - s0.t) / 1000)); x += A.vl[0] * ex; z += A.vl[2] * ex; if (!A.g) y += A.vl[1] * ex; }
+  const S = (s1 || s0).s;
+  if (F.pos.distanceToSquared(_c2.set(x, y, z)) > 64) F.pos.set(x, y, z);      // teleports snap
+  else { F.pos.x = damp(F.pos.x, x, 22, dt); F.pos.y = damp(F.pos.y, y, 22, dt); F.pos.z = damp(F.pos.z, z, 22, dt); }
+  F.vel.set(S.vl[0], S.vl[1], S.vl[2]);
+  F.facing = dampAngle(F.facing, S.f, 18, dt); F.aim.yaw = S.ay; F.aim.pitch = S.ap;
+  F.onGround = !!S.g; F.moving = Math.hypot(S.vl[0], S.vl[2]) > 0.6; F.sprint = Math.hypot(S.vl[0], S.vl[2]) > 11;
+  F.dodge = S.dg ? (F.dodge || { dir: new V3(S.vl[0], 0, S.vl[2]).normalize(), t: 0.1, dur: 0.24, local: 0 }) : null;
+  F.iframes = S.dg ? 0.05 : 0;
+  F.slide = S.sd ? (F.slide || { t: 0, dur: 1, dir: new V3(), v0: 0 }) : null;
+  F.flipT = S.fl || 0; F.hidden = !!S.hd; F.glide = S.gl ? 0.05 : 0; F.wingsT = S.wg ? 0.1 : 0;
+  F.stun = S.st ? 0.05 : 0; F.bound = S.bd ? 0.05 : 0;
+  F.maxHp = S.mh || F.maxHp; F.hp = S.hp;
+  if (!S.al && F.alive) defeatFighter(F, S.kb ? (S.kb === NET.myPeer ? player : netFighter(S.kb)) : null);
+  else if (S.al && !F.alive) { F.alive = true; F.rig.root.visible = true; F.el.style.display = ''; F.lag = F.hp; }
+  if (F.slide) F.slide.t = 0;
+}
+
+/* --- casts and damage --- */
+function netSendCast(F, slot) {
+  if (!NET.on || F !== player) return;
+  const A = F.aim, m = F.input.move;
+  NET.room.emit('cast', { s: slot, o: [r2(A.origin.x), r2(A.origin.y), r2(A.origin.z)], d: [r2(A.dir.x), r2(A.dir.y), r2(A.dir.z)],
+    fr: [r2(A.far.x), r2(A.far.y), r2(A.far.z)], pt: [r2(A.point.x), r2(A.point.y), r2(A.point.z)], h: A.hit ? 1 : 0, ay: r2(A.yaw), ap: r2(A.pitch),
+    m: [r2(m.x), r2(m.z)], p: [r2(F.pos.x), r2(F.pos.y), r2(F.pos.z)] }).catch(() => {});
+}
+function netOnCast(msg) {
+  if (msg.sameTab) return;
+  const F = netFighter(msg.peer), d = msg.data;
+  if (!F || !F.alive || !d || !Array.isArray(d.fr)) return;
+  const ab = F.char.abilities[d.s | 0]; if (!ab) return;
+  const A = F.aim;
+  A.origin.set(...d.o); A.dir.set(...d.d).normalize(); A.far.set(...d.fr); A.point.set(...d.pt); A.hit = !!d.h; A.yaw = d.ay; A.pitch = d.ap;
+  F.input.move.set(d.m[0], 0, d.m[1]);
+  if (F.pos.distanceTo(_c2.set(...d.p)) < 6) F.pos.set(...d.p);                 // cast from where they really were
+  F.rig.root.position.copy(F.pos); F.rig.root.updateMatrixWorld(true);
+  try {
+    if (ab.channel) ab.start(F); else ab.cast(F);
+    F.castT = 0; F.lastCastSlot = d.s | 0;
+  } catch (e) { console.error(e); }
+  F.input.move.set(0, 0, 0);
+}
+function netSendRelease(F, slot) { if (NET.on && F === player) NET.room.emit('rel', { s: slot }).catch(() => {}); }
+function netOnRel(msg) {
+  if (msg.sameTab) return;
+  const F = netFighter(msg.peer), ab = F?.char.abilities[msg.data?.s | 0];
+  if (F && ab && ab.channel) ab.stop(F);
+}
+/** Called by hurt() when I damage another player: queue it for them, show my own feedback. */
+function netHurtRemote(d, amt, o) {
+  if (d.iframes > 0) { if (!o.quiet) floatText(centerOf(d), 'dodged', '#ffffff', 'miss'); return 0; }
+  const dir = o.dir || _c2.set(0, 0, 0);
+  NET.hits.push({ t: d.net.peer, a: Math.round(amt * 10) / 10, e: o.element || 'earth', st: o.stun || 0, sl: o.slow || 0, rt: o.root || 0, bu: o.burn || 0, mk: o.mark || 0,
+    f: r2(o.force || 0), u: r2(o.up || 0), dx: r2(dir.x || 0), dz: r2(dir.z || 0), q: o.quiet ? 1 : 0 });
+  const est = Math.max(1, Math.round(amt * PVP_SCALE * (d.armorMul || 1)));
+  if (!o.quiet) { const el = ELEMENTS[o.element || 'earth'] || ELEMENTS.earth, pt = o.point || centerOf(d); floatText(pt, est, el.hex, est >= 90 ? 'crit' : est >= 45 ? 'big' : ''); sparks(pt, Math.min(18, 4 + est / 6) | 0, 6, el.glow, 0.5); }
+  totalDmg += est; combo++; comboT = 2.8; comboBump(); hitMarker(); scoreSub.textContent = `${totalDmg.toLocaleString()} damage dealt`;
+  player.stats.dealt += est; player.ult = Math.min(100, player.ult + est * 0.09);
+  Sfx.hit(Math.min(1.6, 0.6 + est / 60));
+  return est;
+}
+function netFlushHits() {
+  while (NET.hits.length) NET.room.emit('hits', { h: NET.hits.splice(0, 24) }).catch(() => {});
+}
+function netOnHits(msg) {
+  if (msg.sameTab || !Array.isArray(msg.data?.h)) return;
+  const src = netFighter(msg.peer);
+  for (const h of msg.data.h) {
+    if (h.t !== NET.myPeer || !player.alive) continue;
+    if (src) NET.kb = msg.peer;
+    hurt(player, clamp(+h.a || 0, 0, 400), { src, net: true, element: ELEMENTS[h.e] ? h.e : 'earth', stun: h.st, slow: h.sl, root: h.rt, burn: h.bu, mark: h.mk,
+      force: clamp(+h.f || 0, 0, 40), up: clamp(+h.u || 0, 0, 30), dir: new V3(+h.dx || 0, 0, +h.dz || 0), quiet: !!h.q });
+  }
+}
+
+/* --- the match, run by the host --- */
+function netHostAnnounce() {
+  const k = MATCH.state === 'lobby' ? 'lobby' : MATCH.state === 'roundEnd' ? 'end' : MATCH.state === 'matchEnd' ? 'over' : 'round';
+  NET.room?.emit('match', { k, r: MATCH.round, sc: MATCH.score, w: MATCH.winner, e: NET.epoch }).catch(() => {});
+  NET.hostT = 0;
+}
+function netOnMatch(msg) {
+  if (msg.sameTab || msg.peer !== NET.hostPeer) return;
+  const d = msg.data || {}, key = `${d.k}:${d.r}`;
+  if (key === NET.lastMsgKey) return;
+  NET.lastMsgKey = key;
+  netApply(d.k, d.r | 0, Array.isArray(d.sc) ? d.sc.map((v) => v | 0) : [0, 0], d.w | 0);
+}
+function netApply(k, r, sc, w) {
+  NET.lastMsgKey = `${k}:${r}`;
+  if (k === 'round') { MATCH.round = r - 1; MATCH.score = sc; netStartRound(); }
+  else if (k === 'end') { MATCH.score = sc; MATCH.state = 'roundEnd'; MATCH.t = 0; MATCH.winner = w; bigBanner(w === player.team ? 'Round won' : 'Round lost', `${sc[player.team]} – ${sc[1 - player.team]}`, 2.6); slowmo(0.3, 0.7); }
+  else if (k === 'over') { MATCH.score = sc; MATCH.state = 'matchEnd'; MATCH.t = 0; const won = sc[player.team] > sc[1 - player.team]; bigBanner(won ? 'Victory' : 'Defeat', `${sc[player.team]} – ${sc[1 - player.team]} · rematch soon`, 4); }
+  else if (k === 'lobby') { if (MATCH.state !== 'lobby') { MATCH.state = 'lobby'; MATCH.score = [0, 0]; MATCH.round = 0; netRespawn(); } }
+}
+function netHost(k, r, sc, w = -1) { MATCH.winner = w; netApply(k, r, sc, w); NET.epoch++; netHostAnnounce(); }
+function netStartRound() {
+  MATCH.round++; MATCH.state = 'intro'; MATCH.t = 0; MATCH.timer = 99; MATCH.winner = -1;
+  clearCombat();
+  netRespawn();
+  cam.yaw = player.team === 0 ? 0 : PI; cam.pitch = 0.2;
+  bigBanner(`Round ${MATCH.round}`, `${MATCH.score[player.team]} – ${MATCH.score[1 - player.team]}`, 1.9);
+  Sfx.boom(0.6);
+}
+function netRespawn() {
+  const seat = Math.max(0, NET.mySeat), team = seat % 2;
+  player.team = team; NET.kb = null;
+  player.reset(spawnPoint(team, seat >> 1, NET.size), team === 0 ? 0 : PI);
+  player.rig.root.visible = true;
+  for (const R of NET.remotes.values()) { R.F.ult = 0; }
+}
+function updateOnlineMatch(dt, realDt) {
+  MATCH.t += realDt; NET.hostT += realDt;
+  const host = NET.hostPeer === NET.myPeer, seats = NET.seats.length;
+  const teams = [0, 1].map((t) => NET.seats.filter((_, i) => i % 2 === t).length);
+  if (MATCH.state === 'lobby') {
+    if (!player.alive && (NET.respawnT -= realDt) <= 0) netRespawn();
+    if (host && teams[0] && teams[1] && (seats >= NET.size * 2 || NET.forceStart)) { NET.forceStart = false; netHost('round', 1, [0, 0]); }
+  } else if (MATCH.state === 'intro') { if (MATCH.t > 2.0) { MATCH.state = 'fight'; bigBanner('Fight', '', 0.9); Sfx.boom(1); } }
+  else if (MATCH.state === 'fight') {
+    MATCH.timer -= dt;
+    if (host) {
+      const alive = [0, 1].map((t) => FIGHTERS.filter((f) => f.team === t && f.alive).length);
+      if (!teams[0] || !teams[1]) netHost('lobby', 0, [0, 0]);
+      else if (MATCH.t > 2.5 && (!alive[0] || !alive[1])) { const sc = MATCH.score.slice(), w = alive[0] ? 0 : 1; sc[w]++; netHost('end', MATCH.round, sc, w); }
+      else if (MATCH.timer <= 0) {
+        const hpf = [0, 1].map((t) => FIGHTERS.filter((f) => f.team === t).reduce((s, f) => s + (f.alive ? f.hp / f.maxHp : 0), 0));
+        const sc = MATCH.score.slice(), w = hpf[0] >= hpf[1] ? 0 : 1; sc[w]++; netHost('end', MATCH.round, sc, w);
+      }
+    }
+  } else if (MATCH.state === 'roundEnd') {
+    if (host && MATCH.t > 3.2) { if (Math.max(...MATCH.score) >= 3) netHost('over', MATCH.round, MATCH.score); else netHost('round', MATCH.round + 1, MATCH.score); }
+  } else if (MATCH.state === 'matchEnd') {
+    if (host && MATCH.t > 6) netHost('lobby', 0, [0, 0]);
+  }
+  if (host && NET.hostT > 2.5) netHostAnnounce();                 // late joiners and dropped messages catch up
+  // status line
+  let s;
+  const where = `${NET.size}v${NET.size} · code ${NET.code}`;
+  if (NET.mySeat < 0 && seats >= NET.size * 2) s = `Match full · watching · ${where}`;
+  else if (MATCH.state === 'lobby') s = seats < 2 ? `Waiting for players · ${seats}/${NET.size * 2} · ${where}` : host && seats < NET.size * 2 ? `${seats}/${NET.size * 2} players · Enter to start now · ${where}` : `${seats}/${NET.size * 2} players · ${where}`;
+  else s = `Online · ${where} · ${seats} players${host ? ' · you host' : ''}`;
+  if (netStatusEl.textContent !== s) netStatusEl.textContent = s;
+  netStatusEl.hidden = false;
+}
+function netTick(dt) {
+  if (!NET.on || !NET.room) return;
+  netSendPresence();
+  netFlushHits();
+}
+
+/* =====================================================================
+   46. WHAT THE AI LEARNED — a plain-language report of its memory
+   ===================================================================== */
+const DIST_LBL = ['Point-blank (under 5 m)', 'Close (5–10 m)', 'Mid range (10–18 m)', 'Long range (18–30 m)', 'Far (30 m+)'];
+const ACT_LBL = { approach: 'closing in', retreat: 'backing off', strafeL: 'circling', strafeR: 'circling', dodge: 'dodging', melee: 'close attacks', ranged: 'ranged attacks', zone: 'area attacks', mobility: 'dashes and teleports', ult: 'ultimates' };
+function aiReport() {
+  const habits = [], tactics = [];
+  for (let db = 0; db < 5; db++) {
+    const n = {}, dq = {}, cnt = {}; let tot = 0;
+    for (let s = 0; s < NS; s++) {
+      if (decodeState(s).db !== db) continue;
+      for (let a = 0; a < NA; a++) {
+        const lbl = ACT_LBL[AI_ACTIONS[a]], v = AI.N[s * NA + a];
+        n[lbl] = (n[lbl] || 0) + v; tot += v;
+        const d = AI.Q[s * NA + a] - priorQ(s, a);
+        if (Math.abs(d) > 1e-3) { dq[lbl] = (dq[lbl] || 0) + d; cnt[lbl] = (cnt[lbl] || 0) + 1; }
+      }
+    }
+    if (tot >= 8) habits.push({ range: DIST_LBL[db], samples: Math.round(tot), top: Object.entries(n).sort((a, b) => b[1] - a[1]).slice(0, 3).filter(([, v]) => v > 0).map(([move, v]) => ({ move, pct: Math.round((100 * v) / tot) })) });
+    const learned = Object.entries(dq).filter(([k]) => cnt[k] >= 2).map(([move, v]) => ({ move, shift: +(v / cnt[move]).toFixed(3), situations: cnt[move] }));
+    learned.sort((a, b) => b.shift - a.shift);
+    const likes = learned.filter((x) => x.shift > 0.02).slice(0, 2), avoids = learned.filter((x) => x.shift < -0.02).slice(-2).reverse();
+    if (likes.length || avoids.length) tactics.push({ range: DIST_LBL[db], likes, avoids });
+  }
+  const m = AI.meta;
+  return { level: AI.level(), updates: m.exp, yourMovesStudied: m.humanMoves, roundsBotWon: m.botRoundWins, roundsYouWon: m.humanRoundWins, matches: m.matches,
+    skill: +AI.skill().toFixed(2), exploring: +AI.eps().toFixed(2), habits, tactics,
+    hitsItMostWith: Object.entries(m.feared).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([move, hits]) => ({ move, hits })) };
+}
+function renderAiReport() {
+  const R = aiReport(), el = $('aiReport');
+  const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  let h = `<h4>Summary</h4><p>Level <b>${R.level}</b> after <b>${R.updates.toLocaleString()}</b> learning updates. It has studied <b>${R.yourMovesStudied.toLocaleString()}</b> of your moves. Rounds: AI <b>${R.roundsBotWon}</b> – you <b>${R.roundsYouWon}</b> over ${R.matches} finished match${R.matches === 1 ? '' : 'es'}.</p>`;
+  if (!R.updates && !R.yourMovesStudied) h += `<p>It hasn't fought you yet. Training doesn't teach it: play <b>Duel</b> or a <b>Team</b> mode against the bots and come back here.</p>`;
+  if (R.habits.length) h += `<h4>Your habits it copies</h4><ul>${R.habits.map((x) => `<li><b>${x.range}:</b> ${x.top.map((t) => `${t.move} ${t.pct}%`).join(', ')}</li>`).join('')}</ul>`;
+  if (R.tactics.length) h += `<h4>What it learned works against you</h4><ul>${R.tactics.map((x) => `<li><b>${x.range}:</b> ${[x.likes.length ? `now favours ${x.likes.map((t) => t.move).join(' and ')}` : '', x.avoids.length ? `avoids ${x.avoids.map((t) => t.move).join(' and ')}` : ''].filter(Boolean).join('; ')}</li>`).join('')}</ul>`;
+  if (R.hitsItMostWith.length) h += `<h4>Your moves that hurt it most</h4><p>${R.hitsItMostWith.map((x) => `${esc(x.move)} (${x.hits} hit${x.hits === 1 ? '' : 's'})`).join(', ')}</p>`;
+  el.innerHTML = h;
+}
+/* a copy of the report is saved to this page's database so Claude can read it back for you */
+const AISYNC = { db: null, uid: null, lastExp: -1, busy: false };
+aiSyncReady = true;
+(async () => {
+  try {
+    const [db, user] = await Promise.all([window.claude?.use?.('db'), window.claude?.use?.('user')]);
+    if (!db || !user) return;
+    AISYNC.uid = await user.id(); AISYNC.db = AISYNC.uid ? db : null;
+    syncAiReport();
+  } catch { /* no database in this view: the report stays local */ }
+})();
+function syncAiReport() { if (aiSyncReady) doSyncAiReport().catch(() => {}); }
+async function doSyncAiReport() {
+  if (!AISYNC.db || AISYNC.busy || AI.meta.exp === AISYNC.lastExp) return;
+  AISYNC.busy = true;
+  try { await AISYNC.db.doc('ai/' + AISYNC.uid).set({ report: aiReport(), savedAt: new Date().toISOString() }); AISYNC.lastExp = AI.meta.exp; }
+  catch { /* read-only viewer or offline: keep it local */ }
+  AISYNC.busy = false;
+}
+
 player = new Fighter({ charId: 'earth', team: 0, isHuman: true });
 player.reset(new V3(0, terrainHeight(0, 8), 8), 0);
 cam.pivot.copy(player.pos);
@@ -5661,7 +6080,7 @@ frame();
 window.stonefist = {
   cam, aim: () => player.aim, dummies, pillars, boulders, projectiles, fx, CHARS, FIGHTERS, AI, MATCH,
   get player() { return player; },
-  startGame, switchChar, applyQuality,
+  startGame, switchChar, applyQuality, NET, startOnline, aiReport, staticColliders, ARENA_R,
   cast(slot) { return tryCast(player, slot); }, release(slot) { releaseCast(player, slot); },
   setUlt(v) { player.ult = v; },
   step(seconds, dt = 1 / 60) { for (let t = 0; t < seconds; t += dt) simulate(dt, dt); },
