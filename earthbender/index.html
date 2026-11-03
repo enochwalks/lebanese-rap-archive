@@ -1813,35 +1813,66 @@ function buildRig(id) {
     o.castShadow = !m.isMeshBasicMaterial; o.receiveShadow = true; parent.add(o); return o;
   };
   const cap = (r, l) => new THREE.CapsuleGeometry(r, l, 4, 10);
+  // ---- sculpted body: lathe-turned torso and tapered, muscled limbs on the same skeleton ----
+  const role = CHARS[CHAR_INDEX[id]]?.role || 'Support';
+  const B = { Tank: { m: 1.14, w: 1.06, a: 1.12 }, Bruiser: { m: 1.08, w: 0.94, a: 1.2 }, Mage: { m: 0.95, w: 0.9, a: 0.94 }, Assassin: { m: 0.9, w: 0.84, a: 0.9 }, Support: { m: 1.0, w: 0.92, a: 1.0 } }[role];
+  const V2 = THREE.Vector2;
+  const turn = (prof, seg = 22) => new THREE.LatheGeometry(prof.map(([r, y]) => new V2(Math.max(0.0005, r), y)), seg);
+  // limb: rounded ends, swelling to a muscle belly at `mid` (0..1 down its length), pointing down -Y from 0
+  const limb = (len, r0, r1, r2, mid = 0.35, seg = 16) => {
+    const pts = [], N = 14, sm = (t) => t * t * (3 - 2 * t);
+    for (let i = 4; i >= 0; i--) { const q = (i / 4) * (PI / 2); pts.push([Math.cos(q) * r2, -len - Math.sin(q) * r2 * 0.7]); }   // bottom pole -> rim
+    for (let i = N - 1; i >= 1; i--) { const t = i / N; pts.push([t < mid ? lerp(r0, r1, sm(t / mid)) : lerp(r1, r2, sm((t - mid) / (1 - mid))), -t * len]); }
+    for (let i = 0; i <= 4; i++) { const q = (i / 4) * (PI / 2); pts.push([Math.cos(q) * r0, Math.sin(q) * r0 * 0.7]); }
+    return turn(pts, seg);
+  };
   const root = new THREE.Group();
   const hips = new THREE.Group(); hips.position.y = 0.95; root.add(hips);
-  add(new THREE.CylinderGeometry(0.27, 0.25, 0.26, 14), mats.pants, hips, 0, 0, 0, 0, 0, 0, 1, 1, 0.75);
+  // pelvis
+  add(turn([[0.001, -0.17], [0.15, -0.16], [0.24 * B.w, -0.1], [0.27 * B.w, -0.02], [0.26 * B.w, 0.06], [0.24 * B.w, 0.12], [0.001, 0.13]]), mats.pants, hips, 0, 0, 0, 0, 0, 0, 1, 1, 0.72);
   if (S.skirt) {
     const sk = new THREE.MeshStandardMaterial({ color: S.skirt.color, roughness: 0.8, side: THREE.DoubleSide, envMapIntensity: 1 });
-    add(new THREE.CylinderGeometry(0.29, 0.38 + S.skirt.len * 0.15, S.skirt.len, 16, 1, true), sk, hips, 0, -S.skirt.len / 2 + 0.06, 0, 0, 0, 0, 1, 1, 0.78);
+    const L0 = S.skirt.len, r0 = 0.285 * B.w;
+    add(turn([[r0 + 0.05 + L0 * 0.14, -L0 + 0.06], [r0 + 0.03 + L0 * 0.1, -L0 * 0.55 + 0.06], [r0 + 0.012, 0.02], [r0, 0.08]], 24), sk, hips, 0, 0, 0, 0, 0, 0, 1, 1, 0.8);
   }
   const leg = (side) => {
-    const th = new THREE.Group(); th.position.set(0.14 * side, -0.04, 0); hips.add(th);
-    add(cap(0.105, 0.3), mats.pants, th, 0, -0.22, 0);
+    const th = new THREE.Group(); th.position.set(0.135 * side * B.w, -0.05, 0); hips.add(th);
+    add(limb(0.44, 0.122 * B.m, 0.128 * B.m, 0.082 * B.m, 0.25), mats.pants, th, 0, 0, 0, 0, 0, 0, 1, 1, 0.95);          // thigh
     const kn = new THREE.Group(); kn.position.y = -0.46; th.add(kn);
-    add(cap(0.092, 0.26), mats.pants, kn, 0, -0.19, 0);
-    add(cap(0.1, 0.12), mats.boots, kn, 0, -0.31, 0.0);
-    add(cap(0.085, 0.16), mats.boots, kn, 0, -0.42, 0.06, PI / 2, 0, 0, 1.2, 1, 0.9);
+    add(new THREE.SphereGeometry(0.078 * B.m, 12, 10), mats.pants, kn, 0, 0.01, 0.01);                                     // knee
+    add(limb(0.24, 0.08 * B.m, 0.092 * B.m, 0.062 * B.m, 0.3), mats.pants, kn, 0, -0.01, 0, 0, 0, 0, 1, 1, 0.95);        // calf
+    // boot: flared cuff, shaft, heel and a tapered toe
+    add(turn([[0.07 * B.m, -0.4], [0.078 * B.m, -0.3], [0.086 * B.m, -0.2], [0.1 * B.m, -0.17], [0.1 * B.m, -0.15], [0.001, -0.15]], 16), mats.boots, kn, 0, 0, 0);
+    add(turn([[0.001, -0.47], [0.06, -0.47], [0.075, -0.44], [0.075, -0.4], [0.06, -0.37], [0.001, -0.37]], 14), mats.boots, kn, 0, 0, -0.005);
+    add(limb(0.16, 0.062, 0.066, 0.05, 0.4, 12), mats.boots, kn, 0, -0.425, 0.005, -PI / 2, 0, 0, 1.15, 1, 0.62);
     return { th, kn };
   };
   const LL = leg(1), RL = leg(-1);
   const torso = new THREE.Group(); torso.position.y = 0.08; hips.add(torso);
-  add(new THREE.CylinderGeometry(0.31, 0.25, 0.62, 16), mats.top, torso, 0, 0.36, 0, 0, 0, 0, 1, 1, 0.68);
-  add(new THREE.CylinderGeometry(0.33, 0.29, 0.4, 16), mats.vest, torso, 0, 0.47, 0, 0, 0, 0, 1, 1, 0.72);
-  add(new THREE.CylinderGeometry(0.275, 0.275, 0.08, 18), mats.belt, torso, 0, 0.07, 0, 0, 0, 0, 1, 1, 0.74);
-  add(new THREE.CylinderGeometry(0.075, 0.085, 0.14, 10), mats.skin, torso, 0, 0.72, 0);
+  // V-shaped trunk: waist, ribcage, chest, shoulder slope, collar
+  const trunk = (k, y0 = -0.02, y1 = 0.8) => turn([[0.001, y0], [0.24 * B.w * k, y0 + 0.005], [0.235 * B.w * k, 0.1], [0.26 * B.w * k, 0.22], [0.3 * B.m * k, 0.38], [0.33 * B.m * k, 0.5], [0.335 * B.m * k, 0.6],
+    [0.325 * B.m * k, 0.665], [0.27 * B.m * k, 0.72], [0.15 * k, 0.775], [0.09, y1]].filter(([, y]) => y >= y0 && y <= y1), 26);
+  add(trunk(1), mats.top, torso, 0, 0, 0, 0, 0, 0, 1.04, 1, 0.64);
+  add(turn([[0.255 * B.m, 0.26], [0.31 * B.m * 1.03, 0.38], [0.345 * B.m, 0.5], [0.348 * B.m, 0.6], [0.335 * B.m, 0.665], [0.28 * B.m, 0.72], [0.17, 0.765]], 26), mats.vest, torso, 0, 0, 0.004, 0, 0, 0, 1.05, 1, 0.68);   // vest / chest plate
+  add(new THREE.TorusGeometry(0.245 * B.w, 0.03, 8, 30), mats.belt, torso, 0, 0.06, 0, PI / 2, 0, 0, 1.06, 0.66, 1);   // belt
+  add(new THREE.BoxGeometry(0.07, 0.06, 0.03), mats.trim, torso, 0, 0.06, 0.165 * B.w);                                  // buckle
+  add(limb(0.12, 0.068, 0.062, 0.075, 0.5, 12), mats.skin, torso, 0, 0.84, 0);                                          // neck
   // head
-  const head = new THREE.Group(); head.position.y = 0.8; torso.add(head);
-  add(new THREE.SphereGeometry(0.19, 20, 16), mats.skin, head, 0, 0.14, 0.01, 0, 0, 0, 0.95, 1.08, 1);
-  add(new THREE.SphereGeometry(0.09, 12, 8), mats.skin, head, 0, 0.05, 0.08, 0, 0, 0, 1, 0.8, 0.9);        // jaw
+  const head = new THREE.Group(); head.position.y = 0.82; head.scale.setScalar(0.8); torso.add(head);
+  add(new THREE.SphereGeometry(0.19, 28, 22), mats.skin, head, 0, 0.15, 0, 0, 0, 0, 0.9, 1.1, 1.0);                     // skull
+  add(turn([[0.001, -0.06], [0.06, -0.055], [0.1, -0.02], [0.125, 0.04], [0.14, 0.1], [0.001, 0.11]], 20), mats.skin, head, 0, 0.03, 0.045, 0, 0, 0, 1, 1, 0.9);   // jaw + chin
+  add(new THREE.ConeGeometry(0.03, 0.08, 8), mats.skin, head, 0, 0.12, 0.185, PI / 2 + 0.25, 0, 0, 1, 1, 0.7);         // nose
+  for (const sd of [1, -1]) {
+    add(new THREE.SphereGeometry(0.04, 10, 8), mats.skin, head, 0.168 * sd, 0.13, -0.01, 0, 0, 0, 0.45, 1, 0.8);        // ears
+    add(new THREE.BoxGeometry(0.075, 0.016, 0.03), mats.hair, head, 0.068 * sd, 0.2, 0.168, 0, 0, -0.12 * sd);             // brows
+  }
   const eyeMat = (id === 'dark' || id === 'lightning') ? mats.glow : M('#1a120c', 0.3);
-  add(new THREE.SphereGeometry(0.022, 8, 6), eyeMat, head, 0.065, 0.15, 0.172);
-  add(new THREE.SphereGeometry(0.022, 8, 6), eyeMat, head, -0.065, 0.15, 0.172);
+  const white = M('#efe9e2', 0.35);
+  for (const sd of [1, -1]) {
+    add(new THREE.SphereGeometry(0.034, 12, 8), white, head, 0.066 * sd, 0.155, 0.158, 0, 0, 0, 1.25, 0.72, 0.5);   // eye white
+    add(new THREE.SphereGeometry(0.018, 10, 8), eyeMat, head, 0.064 * sd, 0.153, 0.172, 0, 0, 0, 1, 1, 0.5);          // iris
+  }
+  add(new THREE.BoxGeometry(0.07, 0.01, 0.02), M('#5a2e26', 0.6), head, 0, 0.065, 0.172);                                // mouth
   const hairCap = () => add(new THREE.SphereGeometry(0.2, 18, 12, 0, TAU, 0, PI * 0.55), mats.hair, head, 0, 0.15, -0.015, -0.25, 0, 0, 1.02, 1.05, 1.08);
   if (S.hairStyle === 'knot') {
     hairCap(); add(new THREE.SphereGeometry(0.075, 10, 8), mats.hair, head, 0, 0.36, -0.1);
@@ -1877,13 +1908,15 @@ function buildRig(id) {
   }
   const arm = (side) => {
     const sh = new THREE.Group(); sh.position.set(0.37 * side, 0.6, 0); torso.add(sh);
-    add(new THREE.SphereGeometry(0.11, 12, 10), mats.top, sh, 0, 0, 0);
-    add(cap(0.085, 0.24), mats.top, sh, 0, -0.18, 0);
+    add(new THREE.SphereGeometry(0.115 * B.a, 16, 12), mats.top, sh, 0.01 * side, 0.01, 0, 0, 0, 0, 1.05, 0.95, 1);   // deltoid
+    add(limb(0.32, 0.098 * B.a, 0.102 * B.a, 0.068 * B.a, 0.42), mats.top, sh, 0, -0.03, 0);                           // upper arm, biceps belly
     const el = new THREE.Group(); el.position.y = -0.36; sh.add(el);
-    add(cap(0.077, 0.22), id === 'earth' ? mats.trim : mats.skin, el, 0, -0.15, 0);
-    add(cap(0.082, 0.1), mats.trim, el, 0, -0.22, 0);                               // cuff / wrap
+    add(limb(0.27, 0.074 * B.a, 0.082 * B.a, 0.052 * B.a, 0.28), id === 'earth' ? mats.trim : mats.skin, el, 0, 0, 0); // forearm
+    add(turn([[0.068 * B.a, -0.28], [0.072 * B.a, -0.22], [0.07 * B.a, -0.17], [0.061 * B.a, -0.15]], 14), mats.trim, el, 0, 0, 0);   // glove cuff
     const hand = new THREE.Group(); hand.position.y = -0.34; el.add(hand);
-    add(new THREE.SphereGeometry(0.072, 10, 8), mats.skin, hand, 0, 0, 0.01, 0, 0, 0, 1, 1.15, 0.85);
+    add(new THREE.SphereGeometry(0.06, 12, 10), mats.skin, hand, 0, 0.005, 0.005, 0, 0, 0, 0.95, 1.05, 0.62);        // palm
+    add(new THREE.CapsuleGeometry(0.028, 0.07, 4, 8), mats.skin, hand, 0, -0.05, 0.022, 0, 0, PI / 2, 1, 1, 1.1);     // curled fingers
+    add(new THREE.CapsuleGeometry(0.019, 0.045, 4, 8), mats.skin, hand, 0.045 * side, -0.01, 0.03, 0.4, 0, -0.7 * side); // thumb
     return { sh, el, hand };
   };
   const L = arm(1), R = arm(-1);
@@ -5358,7 +5391,9 @@ function updateAim() {
   crossEl.classList.toggle('far', !inRange);
   crossEl.classList.toggle('foe', !!pickTarget(F, 80, 0.6) && enemiesOf(F).some((e) => e.isFighter));
 }
+let camOverride = null;      // automated portrait checks only
 function updateCamera(dt, time) {
+  if (camOverride) { camera.position.copy(camOverride.p); camera.lookAt(camOverride.t); camera.updateMatrixWorld(); return; }
   const turn = (keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0);
   cam.yaw += turn * dt * 2.4;
   cam.pitch = clamp(cam.pitch + ((keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0)) * dt * 1.4, -0.32, 1.2);
@@ -6080,6 +6115,7 @@ frame();
 window.stonefist = {
   cam, aim: () => player.aim, dummies, pillars, boulders, projectiles, fx, CHARS, FIGHTERS, AI, MATCH,
   get player() { return player; },
+  setCamOverride(p, t) { camOverride = p ? { p: new V3(...p), t: new V3(...t) } : null; },
   startGame, switchChar, applyQuality, NET, startOnline, aiReport, staticColliders, ARENA_R, netPeers, netDriveRemote, netOnHits,
   cast(slot) { return tryCast(player, slot); }, release(slot) { releaseCast(player, slot); },
   setUlt(v) { player.ult = v; },
