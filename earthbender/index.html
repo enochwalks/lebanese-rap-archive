@@ -5522,7 +5522,7 @@ function requestLock() {
 }
 function setMode(m) {
   pendingMode = m;
-  document.querySelectorAll('.modes button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  document.querySelectorAll('.modes button[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
   modeNote.textContent = m === 'online' && !NET.api ? 'Online play connects players who open this page on claude.ai. Share it with your friends (Contributor access, so they can cast), then all pick the same match code and team size.' : MODES[m].note;
   $('onlineRow').hidden = m !== 'online';
   $('diffRow').hidden = !(m === 'duel' || m === 'duo' || m === 'trio');
@@ -5536,7 +5536,7 @@ function setDifficulty(d) {
 }
 document.querySelectorAll('#diffRow button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setDifficulty(b.dataset.diff); }));
 document.querySelectorAll('#diffRow button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.diff === difficulty)));
-document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setMode(b.dataset.mode); }));
+document.querySelectorAll('.modes button[data-mode]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setMode(b.dataset.mode); }));
 cardsEl.addEventListener('click', (e) => { const b = e.target.closest('.fc'); if (!b) return; e.stopPropagation(); if (pendingMode === 'online') startOnline(+b.dataset.i); else startGame(pendingMode, +b.dataset.i); });
 $('onlineRow').addEventListener('click', (e) => e.stopPropagation());
 $('onlineRow').addEventListener('keydown', (e) => e.stopPropagation());
