@@ -215,6 +215,9 @@
   .modes button:hover, .modes button:focus-visible { color: var(--ink); border-color: var(--ink-dim); outline: none; }
   .modes button[aria-pressed="true"] { color: #120c08; background: #e4ad62; border-color: #e4ad62; box-shadow: 0 0 26px -6px #e4ad62; }
   #modeNote { margin: 10px 0 0; font-size: 13px; color: var(--ink-dim); }
+  #diffRow { margin-top: 10px; }
+  #diffRow[hidden] { display: none; }
+  #diffRow button { font-size: 11px; padding: 8px 14px; }
   #onlineRow { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 18px; margin-top: 14px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
   #onlineRow[hidden] { display: none; }
   #onlineRow label { display: flex; align-items: center; gap: 8px; }
@@ -313,6 +316,11 @@
       <button type="button" id="mode-duo" data-mode="duo" aria-pressed="false">Team 2v2</button>
       <button type="button" id="mode-trio" data-mode="trio" aria-pressed="false">Team 3v3</button>
       <button type="button" id="mode-online" data-mode="online" aria-pressed="false">Online PvP</button>
+    </div>
+    <div class="modes" id="diffRow" role="group" aria-label="Bot difficulty" hidden>
+      <button type="button" data-diff="easy" aria-pressed="false">Easy</button>
+      <button type="button" data-diff="normal" aria-pressed="true">Normal</button>
+      <button type="button" data-diff="hard" aria-pressed="false">Hard</button>
     </div>
     <div id="onlineRow" hidden>
       <label>Match code <input id="netCode" maxlength="12" value="1" autocomplete="off" spellcheck="false"></label>
@@ -2722,6 +2730,7 @@ function hurt(d, amt, o = {}) {
   if (d.mark > 0) mult *= 1.2;
   if (d.stun > 0) mult *= 1.1;
   if (d.isFighter) { mult *= PVP_SCALE * (d.armorMul || 1); if (src && src.ultT > 0) mult *= 0.7; }
+  if (!NET.on && src) { const D = DIFFS[difficulty]; if (src.isBot && d.team === player.team) mult *= D.dmg; else if (d.isBot && src.team === player.team) mult *= D.taken; }   // difficulty
   const dmg = Math.max(1, Math.round(amt * mult));
   d.hp -= dmg; d.flash = 1;
   if (o.element) d.lastEl = o.element;
@@ -5024,6 +5033,11 @@ function priorQ(s, a) {
   }
   return 0;
 }
+const DIFFS = { easy: { skill: -0.22, dmg: 0.6, taken: 1.25, note: 'Bots hit for 60%, take 25% more damage and react slower.' },
+  normal: { skill: -0.06, dmg: 0.85, taken: 1.0, note: 'Bots hit for 85% damage.' },
+  hard: { skill: 0.08, dmg: 1.0, taken: 1.0, note: 'Full-strength bots that react fast.' } };
+let difficulty = 'normal';
+try { const d = localStorage.getItem('stonefist.diff'); if (DIFFS[d]) difficulty = d; } catch { /* storage blocked */ }
 const AI = {
   Q: null, N: null, meta: null,
   defaults() { return { exp: 0, humanMoves: 0, rounds: 0, botRoundWins: 0, humanRoundWins: 0, matches: 0, skillBias: 0, explore: 0, feared: {}, version: 1 }; },
@@ -5048,7 +5062,7 @@ const AI = {
     catch { /* storage blocked: the brain still learns for this session */ }
   },
   level() { return Math.min(10, 1 + Math.floor(Math.log2(1 + this.meta.exp / 250))); },
-  skill() { return clamp(0.42 + this.level() * 0.035 + this.meta.skillBias, 0.3, 0.95); },
+  skill() { return clamp(0.42 + this.level() * 0.035 + this.meta.skillBias + DIFFS[difficulty].skill, 0.15, 0.95); },
   eps() { return clamp(0.24 * Math.pow(0.9995, this.meta.exp) + this.meta.explore, 0.04, 0.35); },
   choose(s, mask) {
     const row = s * NA;
@@ -5293,10 +5307,10 @@ function endRound(winner) {
   MATCH.state = 'roundEnd'; MATCH.t = 0; MATCH.winner = winner; MATCH.score[winner]++;
   for (const F of FIGHTERS) if (F.isBot && F.bot.lastS >= 0) AI.learn(F.bot.lastS, F.bot.lastA, (F.team === winner ? 2.5 : -2.5) + F.rEvents, 0, true);
   const humanWon = winner === player.team;
-  if (humanWon) { AI.meta.humanRoundWins++; AI.meta.skillBias = Math.min(0.25, AI.meta.skillBias + 0.03); AI.meta.explore = 0.08; }
-  else { AI.meta.botRoundWins++; AI.meta.skillBias = Math.max(-0.1, AI.meta.skillBias - 0.01); AI.meta.explore = 0; }
+  if (humanWon) { AI.meta.humanRoundWins++; AI.meta.skillBias = Math.min(0.15, AI.meta.skillBias + 0.03); AI.meta.explore = 0.08; }
+  else { AI.meta.botRoundWins++; AI.meta.skillBias = Math.max(-0.25, AI.meta.skillBias - 0.06); AI.meta.explore = 0; }
   AI.meta.rounds++; AI.save();
-  bigBanner(humanWon ? 'Round won' : 'Round lost', `${MATCH.score[0]} – ${MATCH.score[1]}${humanWon ? ' · the AI is adapting' : ''}`, 2.6);
+  bigBanner(humanWon ? 'Round won' : 'Round lost', `${MATCH.score[0]} – ${MATCH.score[1]}${humanWon ? ' · the AI is adapting' : ' · the bots ease off a little'}`, 2.6);
   slowmo(0.3, 0.7);
 }
 function endMatch() {
@@ -5511,7 +5525,17 @@ function setMode(m) {
   document.querySelectorAll('.modes button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
   modeNote.textContent = m === 'online' && !NET.api ? 'Online play connects players who open this page on claude.ai. Share it with your friends (Contributor access, so they can cast), then all pick the same match code and team size.' : MODES[m].note;
   $('onlineRow').hidden = m !== 'online';
+  $('diffRow').hidden = !(m === 'duel' || m === 'duo' || m === 'trio');
+  if (!$('diffRow').hidden) modeNote.textContent += ' ' + DIFFS[difficulty].note;
 }
+function setDifficulty(d) {
+  difficulty = d;
+  try { localStorage.setItem('stonefist.diff', d); } catch { /* storage blocked */ }
+  document.querySelectorAll('#diffRow button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.diff === d)));
+  setMode(pendingMode);
+}
+document.querySelectorAll('#diffRow button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setDifficulty(b.dataset.diff); }));
+document.querySelectorAll('#diffRow button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.diff === difficulty)));
 document.querySelectorAll('.modes button').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); setMode(b.dataset.mode); }));
 cardsEl.addEventListener('click', (e) => { const b = e.target.closest('.fc'); if (!b) return; e.stopPropagation(); if (pendingMode === 'online') startOnline(+b.dataset.i); else startGame(pendingMode, +b.dataset.i); });
 $('onlineRow').addEventListener('click', (e) => e.stopPropagation());
@@ -6181,7 +6205,7 @@ window.stonefist = {
   cam, aim: () => player.aim, dummies, pillars, boulders, projectiles, fx, CHARS, FIGHTERS, AI, MATCH,
   get player() { return player; },
   setCamOverride(p, t) { camOverride = p ? { p: new V3(...p), t: new V3(...t) } : null; },
-  startGame, switchChar, applyQuality, NET, startOnline, aiReport, staticColliders, ARENA_R, netPeers, netDriveRemote, netOnHits, potions,
+  startGame, switchChar, applyQuality, NET, startOnline, aiReport, staticColliders, ARENA_R, netPeers, netDriveRemote, netOnHits, potions, setDifficulty,
   cast(slot) { return tryCast(player, slot); }, release(slot) { releaseCast(player, slot); },
   setUlt(v) { player.ult = v; },
   step(seconds, dt = 1 / 60) { for (let t = 0; t < seconds; t += dt) simulate(dt, dt); },
